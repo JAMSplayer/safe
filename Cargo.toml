@@ -1,0 +1,9 @@
+[package]
+name = "safe"
+version = "0.1.0"
+description = "Simple Safe Network Client"
+edition = "2021"
+
+[dependencies]
+libp2p = { version="0.53", features = [] }
+bls = { package = "blsttc", version = "8.0.1" }
