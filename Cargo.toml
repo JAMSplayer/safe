@@ -5,5 +5,7 @@ description = "Simple Safe Network Client"
 edition = "2021"
 
 [dependencies]
-libp2p = { version="0.53", features = [] }
+bytes = { version = "1.0.1", features = ["serde"] }
+serde = "1.0.130"
+libp2p = { version="0.53", features = ["serde"] }
 bls = { package = "blsttc", version = "8.0.1" }

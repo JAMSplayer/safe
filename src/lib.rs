@@ -1,27 +1,11 @@
-use std::fmt;
-use bls::SecretKey;
-use libp2p::PeerId;
+mod error;
 
+use serde::{ser::Serialize, de::Deserialize};
 
+pub use bls::{SecretKey, serde_impl::SerdeSecret};
+pub use libp2p::Multiaddr;
 
-type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Debug)]
-pub enum Error {
-	Custom(String),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	match self {
-    		Error::Custom(str) => {
-        		write!(f, "safe error: \"{}\"", str)
-    		}
-    	}
-    }
-}
-
-impl std::error::Error for Error {}
+use error::{Error, Result};
 
 
 
@@ -48,10 +32,26 @@ impl Default for Safe {
 impl Safe {
     pub fn connect(
         &self,
-        peers: Vec<String>, // PeerId
-        secret: Option<String>, // SecretKey
-    ) -> Result<Option<String>> { // SecretKey
-    	Ok(Some(String::from("YEAH!")))
+        peers: Vec<Multiaddr>,
+        secret: Option<SecretKey>,
+    ) -> Result<Option<SerdeSecret<SecretKey>>> {
+
+        println!("connect() secret: {:?}", &secret.as_ref().unwrap_or(&SecretKey::default()).to_hex());
+
+        let (generated, sk) = match secret {
+            Some(sk) => { (false, sk) },
+            None => { (true, SecretKey::random()) },
+        };
+
+    	return Ok(
+    	   match generated {
+        	    false => { None },
+        	    true => {
+        	        Some(SerdeSecret(sk))
+        	    }
+        	}
+    	);
+//    	Ok(Some(SerdeSecret(SecretKey::random())))
 //    	Err(Error::Custom(String::from("Test")))
     }
 }
