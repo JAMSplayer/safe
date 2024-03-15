@@ -4,6 +4,7 @@ pub use libp2p::Multiaddr;
 
 use tracing::Level;
 use serde::{de::Deserialize, ser::Serialize};
+use xor_name::XorName;
 use sn_client::Client;
 
 pub struct Safe {
@@ -79,8 +80,89 @@ impl Safe {
 //
 // read_register(address: XorAddress) -> Result<Vec<u8>>
 //
-// hash(xor_addr).with(data2).with(data3).xor_addr()
-//
+
+
+mod registers {
+    use xor_name::{XorName, xor_name};
+
+    enum EntryContent {
+        Data(Vec<u8>), // when data_size < max_entry
+        SingleChunkAddress(XorName), // when data_size < max_chunk
+        DataMap(self_encryption::DataMap), // when data_size > max_chunk and datamap_size < max_entry
+        DataMapAddress(XorName), // when data_size > max_chunk and datamap_size > max_entry
+        Registers(Vec<XorName>), // subdirectory
+    }
+
+    struct Entry(String, EntryContent);
+    
+    pub struct XorNameBuilder {
+        origin: XorName,
+        sources: Vec<Vec<u8>>,
+    }
+    
+    
+    impl XorNameBuilder {    
+        pub fn from(xor_name: &XorName) -> Self {
+            Self {
+                origin: xor_name.clone(),
+                sources: vec![],
+            }
+        }
+        
+        pub fn with_bytes(mut self, name: &[u8]) -> Self {
+            self.sources.push(name.to_vec());
+            self
+        }
+        
+        pub fn with_str(mut self, name: &str) -> Self {
+            self.sources.push(name.as_bytes().to_vec());
+            self
+        }
+        
+        pub fn build(self) -> XorName {
+            let mut built = self.origin.0;
+            if !self.sources.is_empty() {
+                let other = XorName::from_content_parts(self.sources);
+                for i in 0..xor_name::XOR_NAME_LEN {
+                    built[i] = built[i] ^ other.0[i];
+                }
+            }
+            XorName(built)
+        }
+    }
+    
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use xor_name::XorName;
+        
+        #[test]
+        fn xor_builder() {
+            let x = XorName::random(&mut rand::thread_rng());
+    
+            let x1: XorName = XorNameBuilder
+                ::from(&x)
+                .build();
+
+            assert_eq!(x.0, x1.0);
+                
+            let x2: XorName = XorNameBuilder
+                ::from(&x)
+                .with_str("test")
+                .build();
+            
+            assert_ne!(x1.0, x2.0);
+
+            let x3: XorName = XorNameBuilder
+                ::from(&x1)
+                .with_bytes("test".as_bytes())
+                .build();
+            
+            assert_eq!(x2.0, x3.0);
+        }
+    }
+    
+}
 
 // TODO: tests
 
