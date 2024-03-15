@@ -18,3 +18,21 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+impl From<sn_client::Error> for Error {
+    fn from(client_error: sn_client::Error) -> Self {
+        Error::Custom(format!("client: {}", client_error))
+    }
+}
+
+impl From<sn_peers_acquisition::error::Error> for Error {
+    fn from(peers_acquisition_error: sn_peers_acquisition::error::Error) -> Self {
+        Error::Custom(format!("peers_acquisition: {}", peers_acquisition_error))
+    }
+}
+
+//impl From<sn_logging::Error> for Error {
+//	fn from(logging_error: sn_logging::Error) -> Self {
+//		Error::Custom(format!("logging: {}", logging_error))
+//	}
+//}
