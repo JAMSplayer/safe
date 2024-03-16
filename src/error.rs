@@ -11,7 +11,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Custom(str) => {
-                write!(f, "safe error: \"{}\"", str)
+                write!(f, "safe: {}", str)
             }
         }
     }

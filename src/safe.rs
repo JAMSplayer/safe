@@ -3,8 +3,6 @@ pub use bls::{serde_impl::SerdeSecret, SecretKey};
 pub use libp2p::Multiaddr;
 
 use tracing::Level;
-use serde::{de::Deserialize, ser::Serialize};
-use xor_name::XorName;
 use sn_client::Client;
 
 pub struct Safe {
@@ -14,33 +12,25 @@ pub struct Safe {
 
 impl Safe {
     pub async fn connect(peers: Vec<Multiaddr>, secret: Option<SecretKey>) -> Result<Self> {
-        Self::init_logging()?;
+//        Self::init_logging()?;
 
-        println!(
-            "connect() secret: {:?}",
-            &secret.as_ref().unwrap_or(&SecretKey::default()).to_hex()
-        );
         let sk = secret.unwrap_or(SecretKey::random());
 
         let not_empty_peers =
             sn_peers_acquisition::get_peers_from_args(sn_peers_acquisition::PeersArgs {
                 first: false,
-                peers: peers,
-                network_contacts_url: None,
+                peers: peers, // if empty, peers will be retrieved from testnet
+                network_contacts_url: None, // use default url
             })
             .await?;
 
-        let client = Client::new(sk, Some(not_empty_peers), false, None, None).await?;
-        let safe = Self { client: client };
+        let client = Client::new(sk, Some(not_empty_peers), None, None).await?;
 
-        return Ok(safe);
-        //    	Ok(Some(SerdeSecret(SecretKey::random())))
-        //    	Err(Error::Custom(String::from("Test")))
+        return Ok(Self { client: client });
     }
 
     fn init_logging() -> Result<()> {
         let logging_targets = vec![
-            // TODO: Reset to nice and clean defaults once we have a better idea of what we want
             ("sn_networking".to_string(), Level::DEBUG),
             ("safe".to_string(), Level::TRACE),
             ("sn_build_info".to_string(), Level::TRACE),
@@ -58,32 +48,28 @@ impl Safe {
         let _ = log_builder
             .initialize()
             .map_err(|e| format!("logging: {}", e));
-        //        let _ = log_builder.initialize()?;
 
         Ok(())
     }
 }
 
-// create register (hash) -> xor address
-
-
-// upload_file(data: Vec<u8>) -> Result<XorAddress>
-//      ? already uploaded
-// 
-// read_file()
-// → sn_client::file::download::read()
-//
-// create_register(data: Vec<u8>, address: Option<XorAddress>) -> Result<XorAddress>
+// create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
 //      ? exists / squatted
 //
 // update_register(new_data: Vec<u8>, address: XorAddress) -> Result<XorAddress>
 //
 // read_register(address: XorAddress) -> Result<Vec<u8>>
 //
+// upload_file(data: Vec<u8>) -> Result<XorAddress>
+//      ? already uploaded
+// 
+// read_file()
+// → sn_client::file::download::read()
+//
 
 
-mod registers {
-    use xor_name::{XorName, xor_name};
+pub mod registers {
+    use xor_name::XorName;
 
     enum EntryContent {
         Data(Vec<u8>), // when data_size < max_entry
@@ -100,8 +86,7 @@ mod registers {
         sources: Vec<Vec<u8>>,
     }
     
-    
-    impl XorNameBuilder {    
+    impl XorNameBuilder {
         pub fn from(xor_name: &XorName) -> Self {
             Self {
                 origin: xor_name.clone(),
@@ -122,7 +107,9 @@ mod registers {
         pub fn build(self) -> XorName {
             let mut built = self.origin.0;
             if !self.sources.is_empty() {
-                let other = XorName::from_content_parts(self.sources);
+                let other = XorName::from_content_parts(
+                    Vec::from_iter(self.sources.iter().map(|v| v.as_slice())).as_slice()
+                );
                 for i in 0..xor_name::XOR_NAME_LEN {
                     built[i] = built[i] ^ other.0[i];
                 }

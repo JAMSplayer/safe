@@ -20,3 +20,8 @@ self_encryption = "*"
 sn_client = { path = "../github/safe_network/sn_client" }
 sn_peers_acquisition = { path="../github/safe_network/sn_peers_acquisition", features = ["network-contacts"] }
 sn_logging = { path = "../github/safe_network/sn_logging" }
+
+[profile.dev]
+debug = 0
+strip = "debuginfo"
+incremental = true
