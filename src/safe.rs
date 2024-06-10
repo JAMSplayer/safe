@@ -2,17 +2,19 @@ pub use crate::error::{Error, Result};
 pub use bls::{serde_impl::SerdeSecret, SecretKey};
 pub use libp2p::Multiaddr;
 
+use std::path::Path;
 use tracing::Level;
 use sn_client::Client;
+use sn_transfers::{HotWallet, MainSecretKey};
+
 
 pub struct Safe {
     client: Client,
-    //    wallet: WalletClient,
+    wallet: HotWallet,
 }
 
 impl Safe {
-    pub async fn connect(peers: Vec<Multiaddr>, secret: Option<SecretKey>) -> Result<Self> {
-//        Self::init_logging()?;
+    pub async fn connect(peers: Vec<Multiaddr>, secret: Option<SecretKey>, wallet_dir: &Path) -> Result<Self> {
 
         let sk = secret.unwrap_or(SecretKey::random());
 
@@ -24,12 +26,18 @@ impl Safe {
             })
             .await?;
 
-        let client = Client::new(sk, Some(not_empty_peers), None, None).await?;
+        let client = Client::new(sk.clone(), Some(not_empty_peers), None, None).await?;
 
-        return Ok(Self { client: client });
+        // TODO: can HotWallet be created from the same key as Client?
+        let mut wallet = HotWallet::load_from_path(wallet_dir, Some(MainSecretKey::new(sk)))?;
+
+        return Ok(Self { client: client, wallet: wallet });
     }
 
-    fn init_logging() -> Result<()> {
+
+//    pub async fn register_create()
+
+    pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
             ("sn_networking".to_string(), Level::DEBUG),
             ("safe".to_string(), Level::TRACE),
@@ -47,25 +55,34 @@ impl Safe {
         log_builder.format(sn_logging::LogFormat::Default);
         let _ = log_builder
             .initialize()
-            .map_err(|e| format!("logging: {}", e));
+            .map_err(|e| Error::Custom(format!("logging: {}", e)))?;
 
         Ok(())
     }
 }
 
 // create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
+//      ! if address is None, that means it should be assigned a random address
 //      ? exists / squatted
-//
-// update_register(new_data: Vec<u8>, address: XorAddress) -> Result<XorAddress>
 //
 // read_register(address: XorAddress) -> Result<Vec<u8>>
 //
+// update_register(new_data: Vec<u8>, address: XorAddress) -> Result<XorAddress>
+//
 // upload_file(data: Vec<u8>) -> Result<XorAddress>
 //      ? already uploaded
-// 
+//
 // read_file()
 // → sn_client::file::download::read()
 //
+
+// Add optional maxium price caller agrees to pay for operation.
+// A "limit exceeded" error as a possible Result
+// Keep internal statistics about price needed for any operation
+// A "price cannot be estimated" as a possible Result
+
+// serialization: bincode
+// https://docs.rs/bincode/latest/bincode/
 
 
 pub mod registers {
@@ -76,11 +93,13 @@ pub mod registers {
         SingleChunkAddress(XorName), // when data_size < max_chunk
         DataMap(self_encryption::DataMap), // when data_size > max_chunk and datamap_size < max_entry
         DataMapAddress(XorName), // when data_size > max_chunk and datamap_size > max_entry
-        Registers(Vec<XorName>), // subdirectory
+
+//        Collection(Map<String, EntryContent>), // subdirectory
+        Stream(Vec<XorName>), // stream
     }
 
     struct Entry(String, EntryContent);
-    
+
     pub struct XorNameBuilder {
         origin: XorName,
         sources: Vec<Vec<u8>>,
@@ -150,6 +169,3 @@ pub mod registers {
     }
     
 }
-
-// TODO: tests
-

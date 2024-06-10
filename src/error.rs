@@ -31,6 +31,12 @@ impl From<sn_peers_acquisition::error::Error> for Error {
     }
 }
 
+impl From<sn_transfers::WalletError> for Error {
+    fn from(wallet_error: sn_transfers::WalletError) -> Self {
+        Error::Custom(format!("transfers: {}", wallet_error))
+    }
+}
+
 //impl From<sn_logging::Error> for Error {
 //	fn from(logging_error: sn_logging::Error) -> Self {
 //		Error::Custom(format!("logging: {}", logging_error))
