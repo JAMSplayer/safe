@@ -1,21 +1,27 @@
 pub use crate::error::{Error, Result};
 pub use bls::{serde_impl::SerdeSecret, SecretKey};
 pub use libp2p::Multiaddr;
+pub use sn_registers::Permissions;
 
+use sn_client::{Client, ClientRegister, WalletClient};
+use sn_transfers::{HotWallet, MainSecretKey, NanoTokens};
 use std::path::Path;
 use tracing::Level;
-use sn_client::Client;
-use sn_transfers::{HotWallet, MainSecretKey};
-
+use xor_name::XorName;
 
 pub struct Safe {
     client: Client,
-    wallet: HotWallet,
+    wallet: WalletClient, // TODO: why am I forced to store Client twice?
 }
 
-impl Safe {
-    pub async fn connect(peers: Vec<Multiaddr>, secret: Option<SecretKey>, wallet_dir: &Path) -> Result<Self> {
+type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
 
+impl Safe {
+    pub async fn connect(
+        peers: Vec<Multiaddr>,
+        secret: Option<SecretKey>,
+        wallet_dir: &Path,
+    ) -> Result<Self> {
         let sk = secret.unwrap_or(SecretKey::random());
 
         let not_empty_peers =
@@ -29,13 +35,33 @@ impl Safe {
         let client = Client::new(sk.clone(), Some(not_empty_peers), None, None).await?;
 
         // TODO: can HotWallet be created from the same key as Client?
-        let mut wallet = HotWallet::load_from_path(wallet_dir, Some(MainSecretKey::new(sk)))?;
+        let hot_wallet = HotWallet::load_from_path(wallet_dir, Some(MainSecretKey::new(sk)))?;
+        let wallet = WalletClient::new(client.clone(), hot_wallet);
 
-        return Ok(Self { client: client, wallet: wallet });
+        return Ok(Self {
+            client: client,
+            wallet: wallet,
+        });
     }
 
+    fn only_owner_can_write() -> Permissions {
+        Permissions::default()
+    }
 
-//    pub async fn register_create()
+    pub async fn register_create(
+        &mut self,
+        meta: XorName,
+        perms: Option<Permissions>,
+    ) -> PaymentResult<ClientRegister> {
+        let perms = perms.unwrap_or(Self::only_owner_can_write());
+        let register_with_payment =
+            ClientRegister::create_online(self.client.clone(), meta, &mut self.wallet, true, perms)
+                .await?;
+
+        // let public_key = self.client.signer_pk();
+        // let register = Register::new(public_key, meta, perms);
+        Ok(register_with_payment)
+    }
 
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
@@ -84,17 +110,16 @@ impl Safe {
 // serialization: bincode
 // https://docs.rs/bincode/latest/bincode/
 
-
 pub mod registers {
     use xor_name::XorName;
 
     enum EntryContent {
-        Data(Vec<u8>), // when data_size < max_entry
-        SingleChunkAddress(XorName), // when data_size < max_chunk
+        Data(Vec<u8>),                     // when data_size < max_entry
+        SingleChunkAddress(XorName),       // when data_size < max_chunk
         DataMap(self_encryption::DataMap), // when data_size > max_chunk and datamap_size < max_entry
         DataMapAddress(XorName), // when data_size > max_chunk and datamap_size > max_entry
 
-//        Collection(Map<String, EntryContent>), // subdirectory
+        // Collection(Map<String, EntryContent>), // subdirectory
         Stream(Vec<XorName>), // stream
     }
 
@@ -104,7 +129,7 @@ pub mod registers {
         origin: XorName,
         sources: Vec<Vec<u8>>,
     }
-    
+
     impl XorNameBuilder {
         pub fn from(xor_name: &XorName) -> Self {
             Self {
@@ -112,22 +137,36 @@ pub mod registers {
                 sources: vec![],
             }
         }
-        
+
+        pub fn from_str(name: &str) -> Self {
+            Self {
+                origin: XorName::from_content(name.as_bytes()),
+                sources: vec![],
+            }
+        }
+
+        pub fn random() -> Self {
+            Self {
+                origin: XorName::random(&mut rand::thread_rng()),
+                sources: vec![],
+            }
+        }
+
         pub fn with_bytes(mut self, name: &[u8]) -> Self {
             self.sources.push(name.to_vec());
             self
         }
-        
+
         pub fn with_str(mut self, name: &str) -> Self {
             self.sources.push(name.as_bytes().to_vec());
             self
         }
-        
+
         pub fn build(self) -> XorName {
             let mut built = self.origin.0;
             if !self.sources.is_empty() {
                 let other = XorName::from_content_parts(
-                    Vec::from_iter(self.sources.iter().map(|v| v.as_slice())).as_slice()
+                    Vec::from_iter(self.sources.iter().map(|v| v.as_slice())).as_slice(),
                 );
                 for i in 0..xor_name::XOR_NAME_LEN {
                     built[i] = built[i] ^ other.0[i];
@@ -136,36 +175,29 @@ pub mod registers {
             XorName(built)
         }
     }
-    
+
     #[cfg(test)]
     mod tests {
         use super::*;
         use xor_name::XorName;
-        
+
         #[test]
         fn xor_builder() {
-            let x = XorName::random(&mut rand::thread_rng());
-    
-            let x1: XorName = XorNameBuilder
-                ::from(&x)
-                .build();
+            let x = XorNameBuilder::random().build();
+
+            let x1: XorName = XorNameBuilder::from(&x).build();
 
             assert_eq!(x.0, x1.0);
-                
-            let x2: XorName = XorNameBuilder
-                ::from(&x)
-                .with_str("test")
-                .build();
-            
+
+            let x2: XorName = XorNameBuilder::from(&x).with_str("test").build();
+
             assert_ne!(x1.0, x2.0);
 
-            let x3: XorName = XorNameBuilder
-                ::from(&x1)
+            let x3: XorName = XorNameBuilder::from(&x1)
                 .with_bytes("test".as_bytes())
                 .build();
-            
+
             assert_eq!(x2.0, x3.0);
         }
     }
-    
 }
