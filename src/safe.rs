@@ -1,17 +1,20 @@
 pub use crate::error::{Error, Result};
-pub use bls::{serde_impl::SerdeSecret, SecretKey};
+pub use bls::{PublicKey, SecretKey};
 pub use libp2p::Multiaddr;
 pub use sn_registers::Permissions;
 
 use sn_client::{Client, ClientRegister, WalletClient};
-use sn_transfers::{HotWallet, MainSecretKey, NanoTokens};
-use std::path::Path;
+use sn_transfers::{HotWallet, MainSecretKey, NanoTokens, Transfer};
+use std::{path::PathBuf, time::Duration};
 use tracing::Level;
 use xor_name::XorName;
 
+
+#[derive(Debug, Clone)]
 pub struct Safe {
-    client: Client,
-    wallet: WalletClient, // TODO: why am I forced to store Client twice?
+    pub client: Client,
+    wallet_dir: PathBuf,
+    sk: SecretKey,
 }
 
 type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
@@ -34,15 +37,13 @@ impl Safe {
 
         let client = Client::new(sk.clone(), Some(not_empty_peers), None, None).await?;
 
-        // TODO: can HotWallet be created from the same key as Client?
-        let hot_wallet = HotWallet::load_from_path(wallet_dir, Some(MainSecretKey::new(sk)))?;
-        let wallet = WalletClient::new(client.clone(), hot_wallet);
+        println!("Client created.");
 
-        return Ok(Self {
+        Ok(Safe {
             client: client,
-            wallet: wallet,
-        });
-    }
+            wallet_dir: wallet_dir,
+            sk: sk,
+        })
 
     fn only_owner_can_write() -> Permissions {
         Permissions::default()
@@ -53,14 +54,39 @@ impl Safe {
         meta: XorName,
         perms: Option<Permissions>,
     ) -> PaymentResult<ClientRegister> {
-        let perms = perms.unwrap_or(Self::only_owner_can_write());
-        let register_with_payment =
-            ClientRegister::create_online(self.client.clone(), meta, &mut self.wallet, true, perms)
-                .await?;
+        let perms = perms.unwrap_or(only_owner_can_write());
+        let register_with_payment = ClientRegister::create_online(
+            self.client.clone(),
+            meta,
+            &mut self.wallet_client()?,
+            true,
+            perms,
+        )
+        .await?;
 
         // let public_key = self.client.signer_pk();
         // let register = Register::new(public_key, meta, perms);
         Ok(register_with_payment)
+    }
+
+    pub async fn receive(&self, transfer: String) -> Result<()> {
+        let transfer =
+            Transfer::from_hex(&transfer).map_err(|e| Error::Custom(format!("transfer: {}", e)))?;
+        println!("Successfully parsed transfer");
+
+        let mut wallet = self.hot_wallet()?;
+        let cashnotes = self.client.receive(&transfer, &wallet).await?;
+        println!(
+            "Successfully verified transfer. Cashnotes: {:?}",
+            &cashnotes
+        );
+
+        let old_balance = wallet.balance();
+        wallet.deposit_and_store_to_disk(&cashnotes)?;
+        let new_balance = wallet.balance();
+        println!("Successfully stored cash_note to wallet dir. \nOld balance: {old_balance}\nNew balance: {new_balance}");
+
+        Ok(())
     }
 
     pub fn init_logging() -> Result<()> {
@@ -84,6 +110,25 @@ impl Safe {
             .map_err(|e| Error::Custom(format!("logging: {}", e)))?;
 
         Ok(())
+    }
+
+    pub fn address(&self) -> Result<PublicKey> {
+        Ok(self.hot_wallet()?.address().public_key())
+    }
+
+    pub fn balance(&self) -> Result<u64> {
+        Ok(self.hot_wallet()?.balance().as_nano())
+    }
+
+    fn hot_wallet(&self) -> Result<HotWallet> {
+        let wallet =
+            HotWallet::load_from_path(&self.wallet_dir, Some(MainSecretKey::new(self.sk.clone())))?;
+        println!("Wallet created.");
+        Ok(wallet)
+    }
+
+    fn wallet_client(&self) -> Result<WalletClient> {
+        Ok(WalletClient::new(self.client.clone(), self.hot_wallet()?))
     }
 }
 
