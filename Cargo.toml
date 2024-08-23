@@ -9,7 +9,7 @@ tokio = "*"
 bytes = { version = "1.0.1", features = ["serde"] }
 serde = "1.0.130"
 tracing = "*"
-rand = "*"
+rand = "0.8.5"
 xor_name = "5.0.0"
 
 libp2p = { version="0.53", features = ["serde"] }

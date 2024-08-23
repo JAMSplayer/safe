@@ -9,6 +9,7 @@ use std::{path::PathBuf, time::Duration};
 use tracing::Level;
 use xor_name::XorName;
 
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct Safe {
@@ -23,19 +24,13 @@ impl Safe {
     pub async fn connect(
         peers: Vec<Multiaddr>,
         secret: Option<SecretKey>,
-        wallet_dir: &Path,
-    ) -> Result<Self> {
+        wallet_dir: PathBuf,
+    ) -> Result<Safe> {
         let sk = secret.unwrap_or(SecretKey::random());
 
-        let not_empty_peers =
-            sn_peers_acquisition::get_peers_from_args(sn_peers_acquisition::PeersArgs {
-                first: false,
-                peers: peers, // if empty, peers will be retrieved from testnet
-                network_contacts_url: None, // use default url
-            })
-            .await?;
+        println!("Connecting...");
 
-        let client = Client::new(sk.clone(), Some(not_empty_peers), None, None).await?;
+        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
 
         println!("Client created.");
 
@@ -44,9 +39,6 @@ impl Safe {
             wallet_dir: wallet_dir,
             sk: sk,
         })
-
-    fn only_owner_can_write() -> Permissions {
-        Permissions::default()
     }
 
     pub async fn register_create(
@@ -132,6 +124,10 @@ impl Safe {
     }
 }
 
+fn only_owner_can_write() -> Permissions {
+    Permissions::default()
+}
+
 // create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
 //      ! if address is None, that means it should be assigned a random address
 //      ? exists / squatted
@@ -152,23 +148,8 @@ impl Safe {
 // Keep internal statistics about price needed for any operation
 // A "price cannot be estimated" as a possible Result
 
-// serialization: bincode
-// https://docs.rs/bincode/latest/bincode/
-
 pub mod registers {
     use xor_name::XorName;
-
-    enum EntryContent {
-        Data(Vec<u8>),                     // when data_size < max_entry
-        SingleChunkAddress(XorName),       // when data_size < max_chunk
-        DataMap(self_encryption::DataMap), // when data_size > max_chunk and datamap_size < max_entry
-        DataMapAddress(XorName), // when data_size > max_chunk and datamap_size > max_entry
-
-        // Collection(Map<String, EntryContent>), // subdirectory
-        Stream(Vec<XorName>), // stream
-    }
-
-    struct Entry(String, EntryContent);
 
     pub struct XorNameBuilder {
         origin: XorName,
