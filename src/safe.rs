@@ -1,13 +1,15 @@
 pub use crate::error::{Error, Result};
 pub use bls::{PublicKey, SecretKey};
 pub use libp2p::Multiaddr;
-pub use sn_registers::Permissions;
+pub use sn_client::ClientRegister as Register;
+pub use sn_registers::{Permissions, RegisterAddress};
+pub use sn_transfers::NanoTokens;
+pub use xor_name::XorName;
 
-use sn_client::{Client, ClientRegister, WalletClient};
-use sn_transfers::{HotWallet, MainSecretKey, NanoTokens, Transfer};
+use sn_client::{Client, WalletClient};
+use sn_transfers::{HotWallet, MainSecretKey, Transfer};
 use std::{path::PathBuf, time::Duration};
 use tracing::Level;
-use xor_name::XorName;
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -18,7 +20,26 @@ pub struct Safe {
     sk: SecretKey,
 }
 
-type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
+pub type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
+
+pub fn add_payment<T>(
+    pr: PaymentResult<T>,
+    other_cost: NanoTokens,
+    other_royalties: NanoTokens,
+) -> PaymentResult<T> {
+    if let Ok((v, cost, royalties)) = pr {
+        Ok((
+            v,
+            cost.checked_add(other_cost)
+                .ok_or(Error::Custom("Overflow".to_string()))?,
+            royalties
+                .checked_add(other_royalties)
+                .ok_or(Error::Custom("Overflow".to_string()))?,
+        ))
+    } else {
+        pr
+    }
+}
 
 impl Safe {
     pub async fn connect(
@@ -45,9 +66,9 @@ impl Safe {
         &mut self,
         meta: XorName,
         perms: Option<Permissions>,
-    ) -> PaymentResult<ClientRegister> {
+    ) -> PaymentResult<Register> {
         let perms = perms.unwrap_or(only_owner_can_write());
-        let register_with_payment = ClientRegister::create_online(
+        let register_with_payment = Register::create_online(
             self.client.clone(),
             meta,
             &mut self.wallet_client()?,
@@ -56,9 +77,40 @@ impl Safe {
         )
         .await?;
 
-        // let public_key = self.client.signer_pk();
-        // let register = Register::new(public_key, meta, perms);
         Ok(register_with_payment)
+    }
+
+    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
+        Ok(self
+            .client
+            .get_register(RegisterAddress::new(meta, self.sk.public_key()))
+            .await?)
+    }
+
+    pub async fn register_write(reg: &mut Register, data: &[u8]) -> Result<()> {
+        reg.write_merging_branches_online(data, true).await?;
+        Ok(())
+    }
+
+    // In case of multiple branches, register is merged with one of the entries copied on top.
+    pub async fn read_register(reg: &mut Register, version: u32) -> Result<Option<Vec<u8>>> {
+        if version > 0 {
+            return Err(Error::Custom(String::from(
+                "Registers versioning is not yet supported.",
+            )));
+        };
+
+        let entries = reg.read();
+
+        Ok(match entries.iter().next() {
+            Some(e) => {
+                if entries.len() > 1 {
+                    reg.write_merging_branches_online(&e.1, false).await?
+                }
+                Some(e.1.clone())
+            }
+            None => None,
+        })
     }
 
     pub async fn receive(&self, transfer: String) -> Result<()> {
