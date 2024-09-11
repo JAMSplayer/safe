@@ -13,7 +13,7 @@ use tracing::Level;
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Safe {
     pub client: Client,
     wallet_dir: PathBuf,
