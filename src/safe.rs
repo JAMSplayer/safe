@@ -1,137 +1,144 @@
 pub use crate::error::{Error, Result};
-pub use bls::{PublicKey, SecretKey};
+pub use bls::{SecretKey};
 pub use libp2p::Multiaddr;
-pub use sn_client::ClientRegister as Register;
+//pub use sn_client::ClientRegister as Register;
 pub use sn_registers::{Permissions, RegisterAddress};
-pub use sn_transfers::NanoTokens;
+//pub use sn_transfers::NanoTokens;
 pub use xor_name::XorName;
+pub use alloy_primitives::Address;
 
-use sn_client::{Client, WalletClient};
-use sn_transfers::{HotWallet, MainSecretKey, Transfer};
+//use sn_client::{Client, WalletClient};
+use autonomi::{Client, Wallet, get_evm_network_from_env};
+//use sn_transfers::{HotWallet, MainSecretKey, Transfer};
 use std::{path::PathBuf, time::Duration};
 use tracing::Level;
 
-const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+const _CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
 pub struct Safe {
     pub client: Client,
-    wallet_dir: PathBuf,
+//    _wallet_dir: PathBuf,
+    wallet: Wallet,
     sk: SecretKey,
 }
 
-pub type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
-
-pub fn add_payment<T>(
-    pr: PaymentResult<T>,
-    other_cost: NanoTokens,
-    other_royalties: NanoTokens,
-) -> PaymentResult<T> {
-    if let Ok((v, cost, royalties)) = pr {
-        Ok((
-            v,
-            cost.checked_add(other_cost)
-                .ok_or(Error::Custom("Overflow".to_string()))?,
-            royalties
-                .checked_add(other_royalties)
-                .ok_or(Error::Custom("Overflow".to_string()))?,
-        ))
-    } else {
-        pr
-    }
-}
+//pub type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
+//
+//pub fn add_payment<T>(
+//    pr: PaymentResult<T>,
+//    other_cost: NanoTokens,
+//    other_royalties: NanoTokens,
+//) -> PaymentResult<T> {
+//    if let Ok((v, cost, royalties)) = pr {
+//        Ok((
+//            v,
+//            cost.checked_add(other_cost)
+//                .ok_or(Error::Custom("Overflow".to_string()))?,
+//            royalties
+//                .checked_add(other_royalties)
+//                .ok_or(Error::Custom("Overflow".to_string()))?,
+//        ))
+//    } else {
+//        pr
+//    }
+//}
 
 impl Safe {
     pub async fn connect(
         peers: Vec<Multiaddr>,
         secret: Option<SecretKey>,
-        wallet_dir: PathBuf,
+        _wallet_dir: PathBuf,
     ) -> Result<Safe> {
         let sk = secret.unwrap_or(SecretKey::random());
 
         println!("Connecting...");
 
-        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
+//        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
+        let client = Client::connect(&peers).await?;
+        let network = get_evm_network_from_env()?;
+        let wallet = Wallet::new_from_private_key(network, &sk.to_hex())?;
 
         println!("Client created.");
 
         Ok(Safe {
             client: client,
-            wallet_dir: wallet_dir,
+//            _wallet_dir: _wallet_dir,
+            wallet: wallet,
             sk: sk,
         })
     }
 
-    pub async fn register_create(
-        &mut self,
-        meta: XorName,
-        perms: Option<Permissions>,
-    ) -> PaymentResult<Register> {
-        let perms = perms.unwrap_or(only_owner_can_write());
-        let register_with_payment = Register::create_online(
-            self.client.clone(),
-            meta,
-            &mut self.wallet_client()?,
-            true,
-            perms,
-        )
-        .await?;
-
-        Ok(register_with_payment)
-    }
-
-    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
-        Ok(self
-            .client
-            .get_register(RegisterAddress::new(meta, self.sk.public_key()))
-            .await?)
-    }
-
-    pub async fn register_write(reg: &mut Register, data: &[u8]) -> Result<()> {
-        reg.write_merging_branches_online(data, true).await?;
-        Ok(())
-    }
-
-    // In case of multiple branches, register is merged with one of the entries copied on top.
-    pub async fn read_register(reg: &mut Register, version: u32) -> Result<Option<Vec<u8>>> {
-        if version > 0 {
-            return Err(Error::Custom(String::from(
-                "Registers versioning is not yet supported.",
-            )));
-        };
-
-        let entries = reg.read();
-
-        Ok(match entries.iter().next() {
-            Some(e) => {
-                if entries.len() > 1 {
-                    reg.write_merging_branches_online(&e.1, false).await?
-                }
-                Some(e.1.clone())
-            }
-            None => None,
-        })
-    }
-
-    pub async fn receive(&self, transfer: String) -> Result<()> {
-        let transfer =
-            Transfer::from_hex(&transfer).map_err(|e| Error::Custom(format!("transfer: {}", e)))?;
-        println!("Successfully parsed transfer");
-
-        let mut wallet = self.hot_wallet()?;
-        let cashnotes = self.client.receive(&transfer, &wallet).await?;
-        println!(
-            "Successfully verified transfer. Cashnotes: {:?}",
-            &cashnotes
-        );
-
-        let old_balance = wallet.balance();
-        wallet.deposit_and_store_to_disk(&cashnotes)?;
-        let new_balance = wallet.balance();
-        println!("Successfully stored cash_note to wallet dir. \nOld balance: {old_balance}\nNew balance: {new_balance}");
-
-        Ok(())
-    }
+//    pub async fn register_create(
+//        &mut self,
+//        meta: XorName,
+//        perms: Option<Permissions>,
+//    ) -> PaymentResult<Register> {
+//        let perms = perms.unwrap_or(only_owner_can_write());
+//        let register_with_payment = Register::create_online(
+//            self.client.clone(),
+//            meta,
+//            &mut self.wallet_client()?,
+//            true,
+//            perms,
+//        )
+//        .await?;
+//
+//        Ok(register_with_payment)
+//    }
+//
+//    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
+//        Ok(self
+//            .client
+//            .get_register(RegisterAddress::new(meta, self.sk.public_key()))
+//            .await?)
+//    }
+//
+//    pub async fn register_write(reg: &mut Register, data: &[u8]) -> Result<()> {
+//        reg.write_merging_branches_online(data, true).await?;
+//        Ok(())
+//    }
+//
+//    // In case of multiple branches, register is merged with one of the entries copied on top.
+//    pub async fn read_register(reg: &mut Register, version: u32) -> Result<Option<Vec<u8>>> {
+//        if version > 0 {
+//            return Err(Error::Custom(String::from(
+//                "Registers versioning is not yet supported.",
+//            )));
+//        };
+//
+//        let entries = reg.read();
+//
+//        Ok(match entries.iter().next() {
+//            Some(e) => {
+//                if entries.len() > 1 {
+//                    reg.write_merging_branches_online(&e.1, false).await?
+//                }
+//                Some(e.1.clone())
+//            }
+//            None => None,
+//        })
+//    }
+//
+//    pub async fn receive(&self, transfer: String) -> Result<()> {
+//        let transfer =
+//            Transfer::from_hex(&transfer).map_err(|e| Error::Custom(format!("transfer: {}", e)))?;
+//        println!("Successfully parsed transfer");
+//
+//        let mut wallet = self.hot_wallet()?;
+//        let cashnotes = self.client.receive(&transfer, &wallet).await?;
+//        println!(
+//            "Successfully verified transfer. Cashnotes: {:?}",
+//            &cashnotes
+//        );
+//
+//        let old_balance = wallet.balance();
+//        wallet.deposit_and_store_to_disk(&cashnotes)?;
+//        let new_balance = wallet.balance();
+//        println!("Successfully stored cash_note to wallet dir. \nOld balance: {old_balance}\nNew balance: {new_balance}");
+//
+//        Ok(())
+//    }
 
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
@@ -140,6 +147,7 @@ impl Safe {
             ("sn_build_info".to_string(), Level::TRACE),
             ("sn_cli".to_string(), Level::TRACE),
             ("sn_client".to_string(), Level::TRACE),
+            ("autonomi".to_string(), Level::TRACE),
             ("sn_logging".to_string(), Level::TRACE),
             ("sn_peers_acquisition".to_string(), Level::TRACE),
             ("sn_protocol".to_string(), Level::TRACE),
@@ -156,24 +164,24 @@ impl Safe {
         Ok(())
     }
 
-    pub fn address(&self) -> Result<PublicKey> {
-        Ok(self.hot_wallet()?.address().public_key())
+    pub fn address(&self) -> Result<Address> {
+        Ok(self.wallet.address())
     }
-
-    pub fn balance(&self) -> Result<u64> {
-        Ok(self.hot_wallet()?.balance().as_nano())
-    }
-
-    fn hot_wallet(&self) -> Result<HotWallet> {
-        let wallet =
-            HotWallet::load_from_path(&self.wallet_dir, Some(MainSecretKey::new(self.sk.clone())))?;
-        println!("Wallet created.");
-        Ok(wallet)
-    }
-
-    fn wallet_client(&self) -> Result<WalletClient> {
-        Ok(WalletClient::new(self.client.clone(), self.hot_wallet()?))
-    }
+//
+//    pub fn balance(&self) -> Result<u64> {
+//        Ok(self.hot_wallet()?.balance().as_nano())
+//    }
+//
+//    fn hot_wallet(&self) -> Result<HotWallet> {
+//        let wallet =
+//            HotWallet::load_from_path(&self._wallet_dir, Some(MainSecretKey::new(self.sk.clone())))?;
+//        println!("Wallet created.");
+//        Ok(wallet)
+//    }
+//
+//    fn wallet_client(&self) -> Result<WalletClient> {
+//        Ok(WalletClient::new(self.client.clone(), self.hot_wallet()?))
+//    }
 }
 
 fn only_owner_can_write() -> Permissions {
