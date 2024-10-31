@@ -6,6 +6,7 @@ pub use sn_registers::{Permissions, RegisterAddress};
 //pub use sn_transfers::NanoTokens;
 pub use xor_name::XorName;
 pub use alloy_primitives::Address;
+pub use evmlib::common::U256;
 
 //use sn_client::{Client, WalletClient};
 use autonomi::{Client, Wallet, get_evm_network_from_env};
@@ -167,11 +168,11 @@ impl Safe {
     pub fn address(&self) -> Result<Address> {
         Ok(self.wallet.address())
     }
-//
-//    pub fn balance(&self) -> Result<u64> {
-//        Ok(self.hot_wallet()?.balance().as_nano())
-//    }
-//
+
+    pub async fn balance(&self) -> Result<U256> {
+        Ok(self.wallet.balance_of_tokens().await?)
+    }
+
 //    fn hot_wallet(&self) -> Result<HotWallet> {
 //        let wallet =
 //            HotWallet::load_from_path(&self._wallet_dir, Some(MainSecretKey::new(self.sk.clone())))?;

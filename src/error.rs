@@ -60,3 +60,9 @@ impl From<evmlib::wallet::Error> for Error {
 		Error::Custom(format!("evm wallet: {}", err))
 	}
 }
+
+impl From<evmlib::contract::network_token::Error> for Error {
+	fn from(err: evmlib::contract::network_token::Error) -> Self {
+		Error::Custom(format!("evm token: {}", err))
+	}
+}
