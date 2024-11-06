@@ -49,6 +49,12 @@ impl From<autonomi::client::ConnectError> for Error {
 	}
 }
 
+impl From<autonomi::client::registers::RegisterError> for Error {
+	fn from(err: autonomi::client::registers::RegisterError) -> Self {
+		Error::Custom(format!("register: {}", err))
+	}
+}
+
 impl From<evmlib::utils::Error> for Error {
 	fn from(err: evmlib::utils::Error) -> Self {
 		Error::Custom(format!("evm utils: {}", err))

@@ -2,12 +2,13 @@ pub use crate::error::{Error, Result};
 pub use bls::{SecretKey};
 pub use libp2p::Multiaddr;
 //pub use sn_client::ClientRegister as Register;
-pub use sn_registers::{Permissions, RegisterAddress};
 //pub use sn_transfers::NanoTokens;
 pub use xor_name::XorName;
 pub use alloy_primitives::Address;
 pub use evmlib::common::U256;
+pub use autonomi::client::registers::{RegisterPermissions, Register};
 
+use sn_registers::RegisterAddress;
 //use sn_client::{Client, WalletClient};
 use autonomi::{Client, Wallet, get_evm_network_from_env};
 //use sn_transfers::{HotWallet, MainSecretKey, Transfer};
@@ -70,24 +71,25 @@ impl Safe {
         })
     }
 
-//    pub async fn register_create(
-//        &mut self,
-//        meta: XorName,
-//        perms: Option<Permissions>,
-//    ) -> PaymentResult<Register> {
-//        let perms = perms.unwrap_or(only_owner_can_write());
-//        let register_with_payment = Register::create_online(
-//            self.client.clone(),
-//            meta,
-//            &mut self.wallet_client()?,
-//            true,
-//            perms,
-//        )
-//        .await?;
-//
-//        Ok(register_with_payment)
-//    }
-//
+	// allows using XorNameBuilder with Xor when you need a deeper naming structure.
+	// when perms is None, only owner can write to the register.
+    pub async fn register_create(
+        &mut self,
+        data: &[u8],
+        meta: XorName,
+        perms: Option<RegisterPermissions>,
+    ) -> Result<Register> {
+        let perms = perms.unwrap_or(self.only_owner_can_write());
+
+		Ok(self.client.register_create_with_permissions(
+			bytes::Bytes::copy_from_slice(data),
+			&format!("{:x}", meta), // convert meta to lower hex string
+			self.sk.clone(),
+			perms,
+			&self.wallet
+		).await?)
+    }
+
 //    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
 //        Ok(self
 //            .client
@@ -183,10 +185,12 @@ impl Safe {
 //    fn wallet_client(&self) -> Result<WalletClient> {
 //        Ok(WalletClient::new(self.client.clone(), self.hot_wallet()?))
 //    }
-}
 
-fn only_owner_can_write() -> Permissions {
-    Permissions::default()
+	fn only_owner_can_write(&self) -> RegisterPermissions {
+//	    RegisterPermissions::new_with([self.sk.clone().public_key()]);
+	    RegisterPermissions::new_with([self.sk.public_key()])
+	}
+
 }
 
 // create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
