@@ -1,17 +1,13 @@
 pub use crate::error::{Error, Result};
-pub use bls::{SecretKey};
-pub use libp2p::Multiaddr;
-//pub use sn_client::ClientRegister as Register;
-//pub use sn_transfers::NanoTokens;
-pub use xor_name::XorName;
-pub use alloy_primitives::Address;
+pub use alloy_primitives::Address as EvmAddress;
+pub use autonomi::{Client, client::registers::{Register, RegisterPermissions}};
+pub use bls::SecretKey;
 pub use evmlib::common::U256;
-pub use autonomi::client::registers::{RegisterPermissions, Register};
+pub use libp2p::Multiaddr;
+pub use xor_name::XorName;
 
-use sn_registers::RegisterAddress;
-//use sn_client::{Client, WalletClient};
-use autonomi::{Client, Wallet, get_evm_network_from_env};
-//use sn_transfers::{HotWallet, MainSecretKey, Transfer};
+use autonomi::{client::registers::RegisterAddress, get_evm_network_from_env, Wallet};
+use bytes::Bytes;
 use std::{path::PathBuf, time::Duration};
 use tracing::Level;
 
@@ -20,11 +16,12 @@ const _CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Clone)]
 pub struct Safe {
     pub client: Client,
-//    _wallet_dir: PathBuf,
     wallet: Wallet,
     sk: SecretKey,
 }
 
+// TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2329
+//
 //pub type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
 //
 //pub fn add_payment<T>(
@@ -56,7 +53,7 @@ impl Safe {
 
         println!("Connecting...");
 
-//        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
+        //        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
         let client = Client::connect(&peers).await?;
         let network = get_evm_network_from_env()?;
         let wallet = Wallet::new_from_private_key(network, &sk.to_hex())?;
@@ -65,14 +62,13 @@ impl Safe {
 
         Ok(Safe {
             client: client,
-//            _wallet_dir: _wallet_dir,
             wallet: wallet,
             sk: sk,
         })
     }
 
-	// allows using XorNameBuilder with Xor when you need a deeper naming structure.
-	// when perms is None, only owner can write to the register.
+    // allows using XorNameBuilder with Xor when you need a deeper naming structure.
+    // when perms is None, only owner can write to the register.
     pub async fn register_create(
         &mut self,
         data: &[u8],
@@ -81,67 +77,46 @@ impl Safe {
     ) -> Result<Register> {
         let perms = perms.unwrap_or(self.only_owner_can_write());
 
-		Ok(self.client.register_create_with_permissions(
-			bytes::Bytes::copy_from_slice(data),
-			&format!("{:x}", meta), // convert meta to lower hex string
-			self.sk.clone(),
-			perms,
-			&self.wallet
-		).await?)
+        Ok(self
+            .client
+            .register_create_with_permissions(
+                Bytes::copy_from_slice(data),
+                &format!("{:x}", meta), // convert meta to lower hex string
+                self.sk.clone(),
+                perms,
+                &self.wallet,
+            )
+            .await?)
     }
 
-//    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
-//        Ok(self
-//            .client
-//            .get_register(RegisterAddress::new(meta, self.sk.public_key()))
-//            .await?)
-//    }
-//
-//    pub async fn register_write(reg: &mut Register, data: &[u8]) -> Result<()> {
-//        reg.write_merging_branches_online(data, true).await?;
-//        Ok(())
-//    }
-//
-//    // In case of multiple branches, register is merged with one of the entries copied on top.
-//    pub async fn read_register(reg: &mut Register, version: u32) -> Result<Option<Vec<u8>>> {
-//        if version > 0 {
-//            return Err(Error::Custom(String::from(
-//                "Registers versioning is not yet supported.",
-//            )));
-//        };
-//
-//        let entries = reg.read();
-//
-//        Ok(match entries.iter().next() {
-//            Some(e) => {
-//                if entries.len() > 1 {
-//                    reg.write_merging_branches_online(&e.1, false).await?
-//                }
-//                Some(e.1.clone())
-//            }
-//            None => None,
-//        })
-//    }
-//
-//    pub async fn receive(&self, transfer: String) -> Result<()> {
-//        let transfer =
-//            Transfer::from_hex(&transfer).map_err(|e| Error::Custom(format!("transfer: {}", e)))?;
-//        println!("Successfully parsed transfer");
-//
-//        let mut wallet = self.hot_wallet()?;
-//        let cashnotes = self.client.receive(&transfer, &wallet).await?;
-//        println!(
-//            "Successfully verified transfer. Cashnotes: {:?}",
-//            &cashnotes
-//        );
-//
-//        let old_balance = wallet.balance();
-//        wallet.deposit_and_store_to_disk(&cashnotes)?;
-//        let new_balance = wallet.balance();
-//        println!("Successfully stored cash_note to wallet dir. \nOld balance: {old_balance}\nNew balance: {new_balance}");
-//
-//        Ok(())
-//    }
+    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
+        let meta = registers::XorNameBuilder::from_str(&format!("{:x}", meta)).build(); // forced by all autonomi api requiring names as strings
+        Ok(self
+            .client
+            .register_get(RegisterAddress::new(meta, self.sk.public_key()))
+            .await?)
+    }
+
+    pub async fn register_write(&self, reg: &Register, data: &[u8]) -> Result<()> {
+        let reg = reg.clone(); // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2396
+        Ok(self
+            .client
+            .register_update(reg, Bytes::copy_from_slice(data), self.sk.clone())
+            .await?)
+    }
+
+    // In case of multiple branches, register is merged with one of the entries copied on top.
+    pub async fn read_register(reg: &mut Register, version: u32) -> Result<Option<Vec<u8>>> {
+        if version > 0 {
+            return Err(Error::Custom(String::from(
+                "Registers versioning is not yet supported.",
+            )));
+        };
+
+        let entries = reg.values();
+
+        Ok(entries.iter().next().map(|bytes| bytes.to_vec()))
+    }
 
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
@@ -149,7 +124,7 @@ impl Safe {
             ("safe".to_string(), Level::TRACE),
             ("sn_build_info".to_string(), Level::TRACE),
             ("sn_cli".to_string(), Level::TRACE),
-            ("sn_client".to_string(), Level::TRACE),
+//            ("sn_client".to_string(), Level::TRACE),
             ("autonomi".to_string(), Level::TRACE),
             ("sn_logging".to_string(), Level::TRACE),
             ("sn_peers_acquisition".to_string(), Level::TRACE),
@@ -167,7 +142,7 @@ impl Safe {
         Ok(())
     }
 
-    pub fn address(&self) -> Result<Address> {
+    pub fn address(&self) -> Result<EvmAddress> {
         Ok(self.wallet.address())
     }
 
@@ -175,29 +150,17 @@ impl Safe {
         Ok(self.wallet.balance_of_tokens().await?)
     }
 
-//    fn hot_wallet(&self) -> Result<HotWallet> {
-//        let wallet =
-//            HotWallet::load_from_path(&self._wallet_dir, Some(MainSecretKey::new(self.sk.clone())))?;
-//        println!("Wallet created.");
-//        Ok(wallet)
-//    }
-//
-//    fn wallet_client(&self) -> Result<WalletClient> {
-//        Ok(WalletClient::new(self.client.clone(), self.hot_wallet()?))
-//    }
-
-	fn only_owner_can_write(&self) -> RegisterPermissions {
-//	    RegisterPermissions::new_with([self.sk.clone().public_key()]);
-	    RegisterPermissions::new_with([self.sk.public_key()])
-	}
-
+    fn only_owner_can_write(&self) -> RegisterPermissions {
+        RegisterPermissions::new_with([self.sk.public_key()])
+    }
 }
 
 // create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
 //      ! if address is None, that means it should be assigned a random address
 //      ? exists / squatted
 //
-// read_register(address: XorAddress) -> Result<Vec<u8>>
+// read_register(meta: XorName) -> Result<Vec<u8>>
+// read_register(address: NetworkAddress) -> Result<Vec<u8>>
 //
 // update_register(new_data: Vec<u8>, address: XorAddress) -> Result<XorAddress>
 //
@@ -271,6 +234,7 @@ pub mod registers {
     mod tests {
         use super::*;
         use xor_name::XorName;
+        use crate::Client;
 
         #[test]
         fn xor_builder() {
@@ -289,6 +253,13 @@ pub mod registers {
                 .build();
 
             assert_eq!(x2.0, x3.0);
+        }
+
+        #[test]
+        fn xorname_from_string_autonomi() {
+            let x1 = XorNameBuilder::from_str("test").build();
+            let x2 = Client::register_address("test", &Client::register_generate_key()).meta();
+            assert_eq!(x1.0, x2.0);
         }
     }
 }

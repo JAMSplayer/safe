@@ -13,12 +13,12 @@ async fn run() -> Result<()> {
     // Safe::init_logging()?;
 
     println!("Connecting with peers: {:?} ...", &peers);
-    let mut s = Safe::connect(peers, None, Path::new("./_wallet")).await?;
+    let mut s = Safe::connect(peers, None, Path::new("./_wallet").to_path_buf()).await?;
     println!("Safenet connected.");
 
     println!("Creating random register ...");
     let reg = s
-        .register_create(XorNameBuilder::random().build(), None)
+        .register_create(&[], XorNameBuilder::random().build(), None)
         .await?;
     println!("Register: {:?}", reg);
 

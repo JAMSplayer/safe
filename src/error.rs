@@ -44,31 +44,31 @@ impl From<sn_peers_acquisition::error::Error> for Error {
 //}
 
 impl From<autonomi::client::ConnectError> for Error {
-	fn from(err: autonomi::client::ConnectError) -> Self {
-		Error::Custom(format!("connect: {}", err))
-	}
+    fn from(err: autonomi::client::ConnectError) -> Self {
+        Error::Custom(format!("connect: {}", err))
+    }
 }
 
 impl From<autonomi::client::registers::RegisterError> for Error {
-	fn from(err: autonomi::client::registers::RegisterError) -> Self {
-		Error::Custom(format!("register: {}", err))
-	}
+    fn from(err: autonomi::client::registers::RegisterError) -> Self {
+        Error::Custom(format!("register: {}", err))
+    }
 }
 
 impl From<evmlib::utils::Error> for Error {
-	fn from(err: evmlib::utils::Error) -> Self {
-		Error::Custom(format!("evm utils: {}", err))
-	}
+    fn from(err: evmlib::utils::Error) -> Self {
+        Error::Custom(format!("evm utils: {}", err))
+    }
 }
 
 impl From<evmlib::wallet::Error> for Error {
-	fn from(err: evmlib::wallet::Error) -> Self {
-		Error::Custom(format!("evm wallet: {}", err))
-	}
+    fn from(err: evmlib::wallet::Error) -> Self {
+        Error::Custom(format!("evm wallet: {}", err))
+    }
 }
 
 impl From<evmlib::contract::network_token::Error> for Error {
-	fn from(err: evmlib::contract::network_token::Error) -> Self {
-		Error::Custom(format!("evm token: {}", err))
-	}
+    fn from(err: evmlib::contract::network_token::Error) -> Self {
+        Error::Custom(format!("evm token: {}", err))
+    }
 }

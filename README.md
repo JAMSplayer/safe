@@ -14,11 +14,3 @@ The goal is to create a high-level Safenet API, that follows best practices and 
 ## Testing
 
 `cargo test`
-
-## Building
-
-If you want to connect to testnet, you have to set `NETWORK_VERSION_MODE` environment variable to name of testnet's *safe_network* repo release branch before build, for example:
-
-```
-export NETWORK_VERSION_MODE="alpha-reward-test"
-```
