@@ -1,12 +1,12 @@
 pub use crate::error::{Error, Result};
 pub use alloy_primitives::Address as EvmAddress;
-pub use autonomi::{Client, client::registers::{Register, RegisterPermissions}};
+pub use autonomi::{Client, client::registers::{Register, RegisterPermissions, RegisterAddress}};
 pub use bls::SecretKey;
 pub use evmlib::common::U256;
 pub use libp2p::Multiaddr;
 pub use xor_name::XorName;
 
-use autonomi::{client::registers::RegisterAddress, get_evm_network_from_env, Wallet};
+use autonomi::{get_evm_network_from_env, Wallet};
 use bytes::Bytes;
 use std::{path::PathBuf, time::Duration};
 use tracing::Level;
@@ -118,6 +118,10 @@ impl Safe {
         Ok(entries.iter().next().map(|bytes| bytes.to_vec()))
     }
 
+	pub fn random_register_address(&self) -> RegisterAddress {
+		RegisterAddress::new(XorName::random(&mut rand::thread_rng()), self.sk.public_key())
+	}
+
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
             ("sn_networking".to_string(), Level::DEBUG),
@@ -153,7 +157,13 @@ impl Safe {
     fn only_owner_can_write(&self) -> RegisterPermissions {
         RegisterPermissions::new_with([self.sk.public_key()])
     }
+
 }
+
+pub fn random_register_address() -> RegisterAddress {
+	RegisterAddress::new(XorName::random(&mut rand::thread_rng()), Client::register_generate_key().public_key())
+}
+
 
 // create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
 //      ! if address is None, that means it should be assigned a random address
