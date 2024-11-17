@@ -22,8 +22,8 @@ sn_peers_acquisition = { path="../github/safe_network/sn_peers_acquisition", fea
 sn_logging = { path = "../github/safe_network/sn_logging" }
 #sn_transfers = { path = "../github/safe_network/sn_transfers" }
 sn_registers = { path = "../github/safe_network/sn_registers" }
-autonomi = { version = "0.2.1", features = ["local", "full"] }
-evmlib = "0.1.1"
+autonomi = { path = "../github/safe_network/autonomi", features = ["local", "full"] }
+evmlib = { path = "../github/safe_network/evmlib" }
 alloy-primitives = "*"
 
 [profile.dev]
