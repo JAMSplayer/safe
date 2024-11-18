@@ -10,6 +10,7 @@ use autonomi::{get_evm_network_from_env, Wallet};
 use bytes::Bytes;
 use std::{path::PathBuf, time::Duration};
 use tracing::Level;
+use sn_peers_acquisition::{get_peers_from_url, NETWORK_CONTACTS_URL};
 
 const _CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -46,10 +47,17 @@ pub struct Safe {
 impl Safe {
     pub async fn connect(
         peers: Vec<Multiaddr>,
+        add_network_peers: bool,
         secret: Option<SecretKey>,
         _wallet_dir: PathBuf,
     ) -> Result<Safe> {
         let sk = secret.unwrap_or(SecretKey::random());
+
+		if add_network_peers {
+	        let mut net_peers = get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str())?).await?;
+	        let mut peers = peers.clone();
+	        peers.append(&mut net_peers);
+		}
 
         println!("Connecting...");
 

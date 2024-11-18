@@ -17,14 +17,13 @@ bls = { package = "blsttc", version = "8.0.1" }
 tiny-keccak = { version = "*", features = [ "sha3" ] }
 
 self_encryption = "*"
-#sn_client = { path = "../github/safe_network/sn_client" }
 sn_peers_acquisition = { path="../github/safe_network/sn_peers_acquisition", features = ["network-contacts"] }
 sn_logging = { path = "../github/safe_network/sn_logging" }
-#sn_transfers = { path = "../github/safe_network/sn_transfers" }
 sn_registers = { path = "../github/safe_network/sn_registers" }
 autonomi = { path = "../github/safe_network/autonomi", features = ["local", "full"] }
 evmlib = { path = "../github/safe_network/evmlib" }
 alloy-primitives = "*"
+url = "*"
 
 [profile.dev]
 debug = 0
