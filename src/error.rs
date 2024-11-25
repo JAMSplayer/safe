@@ -72,9 +72,3 @@ impl From<evmlib::contract::network_token::Error> for Error {
         Error::Custom(format!("evm token: {}", err))
     }
 }
-
-impl From<url::ParseError> for Error {
-    fn from(err: url::ParseError) -> Self {
-        Error::Custom(format!("url parse: {}", err))
-    }
-}

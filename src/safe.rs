@@ -54,19 +54,15 @@ impl Safe {
         let sk = secret.unwrap_or(SecretKey::random());
 
 		if add_network_peers {
-	        let mut net_peers = get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str())?).await?;
+	        let mut net_peers = get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str()).unwrap()).await?;
 	        let mut peers = peers.clone();
 	        peers.append(&mut net_peers);
 		}
-
-        println!("Connecting...");
 
         //        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
         let client = Client::connect(&peers).await?;
         let network = get_evm_network_from_env()?;
         let wallet = Wallet::new_from_private_key(network, &sk.to_hex())?;
-
-        println!("Client created.");
 
         Ok(Safe {
             client: client,
@@ -154,8 +150,8 @@ impl Safe {
         Ok(())
     }
 
-    pub fn address(&self) -> Result<EvmAddress> {
-        Ok(self.wallet.address())
+    pub fn address(&self) -> EvmAddress {
+        self.wallet.address()
     }
 
     pub async fn balance(&self) -> Result<U256> {
