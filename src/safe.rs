@@ -1,6 +1,9 @@
 pub use crate::error::{Error, Result};
 pub use alloy_primitives::Address as EvmAddress;
-pub use autonomi::{Client, client::registers::{Register, RegisterPermissions, RegisterAddress}};
+pub use autonomi::{
+    client::registers::{Register, RegisterAddress, RegisterPermissions},
+    Client,
+};
 pub use bls::SecretKey;
 pub use evmlib::common::U256;
 pub use libp2p::Multiaddr;
@@ -8,17 +11,17 @@ pub use xor_name::XorName;
 
 use autonomi::{get_evm_network_from_env, Wallet};
 use bytes::Bytes;
-use std::{path::PathBuf, time::Duration};
-use tracing::Level;
 use sn_peers_acquisition::{get_peers_from_url, NETWORK_CONTACTS_URL};
+use std::time::Duration;
+use tracing::Level;
 
 const _CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
 pub struct Safe {
-    pub client: Client,
-    wallet: Wallet,
-    sk: SecretKey,
+    client: Client,
+    wallet: Option<Wallet>,
+    sk: Option<SecretKey>,
 }
 
 // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2329
@@ -45,29 +48,47 @@ pub struct Safe {
 //}
 
 impl Safe {
+    // if secret is None, will connect without logging in
     pub async fn connect(
         peers: Vec<Multiaddr>,
         add_network_peers: bool,
         secret: Option<SecretKey>,
-        _wallet_dir: PathBuf,
     ) -> Result<Safe> {
-        let sk = secret.unwrap_or(SecretKey::random());
+        if add_network_peers {
+            let mut net_peers =
+                get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str()).unwrap()).await?;
+            let mut peers = peers.clone();
+            peers.append(&mut net_peers);
+        }
 
-		if add_network_peers {
-	        let mut net_peers = get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str()).unwrap()).await?;
-	        let mut peers = peers.clone();
-	        peers.append(&mut net_peers);
-		}
-
-        //        let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
+        //let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
         let client = Client::connect(&peers).await?;
-        let network = get_evm_network_from_env()?;
-        let wallet = Wallet::new_from_private_key(network, &sk.to_hex())?;
+
+        let wallet = if let Some(sk) = secret.clone() {
+            let network = get_evm_network_from_env()?;
+            Some(Wallet::new_from_private_key(network, &sk.to_hex())?)
+        } else {
+            None
+        };
 
         Ok(Safe {
             client: client,
             wallet: wallet,
-            sk: sk,
+            sk: secret,
+        })
+    }
+
+    // if secret is None, it will be randomized.
+    pub fn login(&mut self, secret: Option<SecretKey>) -> Result<Safe> {
+        let sk = secret.unwrap_or(SecretKey::random());
+
+        let network = get_evm_network_from_env()?;
+        let wallet = Wallet::new_from_private_key(network, &sk.to_hex())?;
+
+        Ok(Safe {
+            client: self.client.clone(),
+            wallet: Some(wallet),
+            sk: Some(sk),
         })
     }
 
@@ -79,34 +100,49 @@ impl Safe {
         meta: XorName,
         perms: Option<RegisterPermissions>,
     ) -> Result<Register> {
-        let perms = perms.unwrap_or(self.only_owner_can_write());
+        let perms = perms.unwrap_or(self.only_owner_can_write()?);
 
-        Ok(self
-            .client
-            .register_create_with_permissions(
-                Bytes::copy_from_slice(data),
-                &format!("{:x}", meta), // convert meta to lower hex string
-                self.sk.clone(),
-                perms,
-                &self.wallet,
-            )
-            .await?)
+        if let Some(_) = self.wallet.as_ref().and(self.sk.as_ref()) {
+            Ok(self
+                .client
+                .register_create_with_permissions(
+                    Bytes::copy_from_slice(data),
+                    &format!("{:x}", meta), // convert meta to lower hex string
+                    self.sk.clone().unwrap(),
+                    perms,
+                    self.wallet.as_ref().unwrap(),
+                )
+                .await?)
+        } else {
+            Err(Error::NotLoggedIn)
+        }
     }
 
-    pub async fn open_register(&self, meta: XorName) -> Result<Register> {
-        let meta = registers::XorNameBuilder::from_str(&format!("{:x}", meta)).build(); // forced by all autonomi api requiring names as strings
-        Ok(self
-            .client
-            .register_get(RegisterAddress::new(meta, self.sk.public_key()))
-            .await?)
+    pub async fn open_own_register(&self, meta: XorName) -> Result<Register> {
+        match &self.sk {
+            Some(sk) => {
+                let meta = registers::XorNameBuilder::from_str(&format!("{:x}", meta)).build(); // forced by all autonomi api requiring names as strings
+                self.open_register(RegisterAddress::new(meta, sk.public_key()))
+                    .await
+            }
+            None => Err(Error::NotLoggedIn),
+        }
+    }
+
+    pub async fn open_register(&self, address: RegisterAddress) -> Result<Register> {
+        Ok(self.client.register_get(address).await?)
     }
 
     pub async fn register_write(&self, reg: &Register, data: &[u8]) -> Result<()> {
         let reg = reg.clone(); // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2396
-        Ok(self
-            .client
-            .register_update(reg, Bytes::copy_from_slice(data), self.sk.clone())
-            .await?)
+        if let Some(sk) = &self.sk {
+            Ok(self
+                .client
+                .register_update(reg, Bytes::copy_from_slice(data), sk.clone())
+                .await?)
+        } else {
+            Err(Error::NotLoggedIn)
+        }
     }
 
     // In case of multiple branches, register is merged with one of the entries copied on top.
@@ -122,9 +158,11 @@ impl Safe {
         Ok(entries.iter().next().map(|bytes| bytes.to_vec()))
     }
 
-	pub fn random_register_address(&self) -> RegisterAddress {
-		RegisterAddress::new(XorName::random(&mut rand::thread_rng()), self.sk.public_key())
-	}
+    pub fn random_register_address(&self) -> Option<RegisterAddress> {
+        self.sk.as_ref().map(|sk| {
+            RegisterAddress::new(XorName::random(&mut rand::thread_rng()), sk.public_key())
+        })
+    }
 
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
@@ -132,7 +170,6 @@ impl Safe {
             ("safe".to_string(), Level::TRACE),
             ("sn_build_info".to_string(), Level::TRACE),
             ("sn_cli".to_string(), Level::TRACE),
-//            ("sn_client".to_string(), Level::TRACE),
             ("autonomi".to_string(), Level::TRACE),
             ("sn_logging".to_string(), Level::TRACE),
             ("sn_peers_acquisition".to_string(), Level::TRACE),
@@ -150,24 +187,36 @@ impl Safe {
         Ok(())
     }
 
-    pub fn address(&self) -> EvmAddress {
-        self.wallet.address()
+    pub fn address(&self) -> Result<EvmAddress> {
+        self.wallet
+            .as_ref()
+            .ok_or(Error::NotLoggedIn)
+            .map(Wallet::address)
     }
 
     pub async fn balance(&self) -> Result<U256> {
-        Ok(self.wallet.balance_of_tokens().await?)
+        Ok(self
+            .wallet
+            .as_ref()
+            .ok_or(Error::NotLoggedIn)?
+            .balance_of_tokens()
+            .await?)
     }
 
-    fn only_owner_can_write(&self) -> RegisterPermissions {
-        RegisterPermissions::new_with([self.sk.public_key()])
+    fn only_owner_can_write(&self) -> Result<RegisterPermissions> {
+        self.sk
+            .as_ref()
+            .ok_or(Error::NotLoggedIn)
+            .map(|sk| RegisterPermissions::new_with([sk.public_key()]))
     }
-
 }
 
 pub fn random_register_address() -> RegisterAddress {
-	RegisterAddress::new(XorName::random(&mut rand::thread_rng()), Client::register_generate_key().public_key())
+    RegisterAddress::new(
+        XorName::random(&mut rand::thread_rng()),
+        Client::register_generate_key().public_key(),
+    )
 }
-
 
 // create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
 //      ! if address is None, that means it should be assigned a random address
@@ -247,8 +296,8 @@ pub mod registers {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use xor_name::XorName;
         use crate::Client;
+        use xor_name::XorName;
 
         #[test]
         fn xor_builder() {
