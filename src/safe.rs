@@ -54,10 +54,10 @@ impl Safe {
         add_network_peers: bool,
         secret: Option<SecretKey>,
     ) -> Result<Safe> {
+        let mut peers = peers.clone();
         if add_network_peers {
             let mut net_peers =
                 get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str()).unwrap()).await?;
-            let mut peers = peers.clone();
             peers.append(&mut net_peers);
         }
 
