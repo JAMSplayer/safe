@@ -1,6 +1,6 @@
 [package]
 name = "safe"
-version = "0.1.4"
+version = "0.1.5"
 description = "Simple Safe Network Client"
 edition = "2021"
 
@@ -15,6 +15,7 @@ xor_name = "5.0.0"
 libp2p = { version="0.53", features = ["serde"] }
 bls = { package = "blsttc", version = "8.0.1" }
 tiny-keccak = { version = "*", features = [ "sha3" ] }
+hex = "*"
 url = "*"
 alloy-primitives = "*"
 
@@ -22,7 +23,7 @@ self_encryption = "*"
 sn_peers_acquisition = { version = "*", features = ["network-contacts"] }
 sn_logging = "0.2.40"
 sn_registers = "*"
-autonomi = { version = "0.2.4", features = ["local", "full"] }
+autonomi = { version = "0.2.4", features = ["local", "full", "loud"] }
 evmlib = "*"
 
 [profile.dev]

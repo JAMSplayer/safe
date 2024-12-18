@@ -9,13 +9,15 @@ pub use evmlib::common::U256;
 pub use libp2p::Multiaddr;
 pub use xor_name::XorName;
 
+use alloy_primitives::Bytes as EvmBytes;
 use autonomi::{get_evm_network_from_env, Wallet};
-use bytes::Bytes;
 use sn_peers_acquisition::{get_peers_from_url, NETWORK_CONTACTS_URL};
+use std::str::FromStr;
 use std::time::Duration;
 use tracing::Level;
 
 const _CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secred, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
 #[derive(Clone)]
 pub struct Safe {
@@ -61,29 +63,36 @@ impl Safe {
             peers.append(&mut net_peers);
         }
 
-        //let client = Client::new(sk.clone(), Some(peers), Some(CONNECTION_TIMEOUT), None).await?;
         let client = Client::connect(&peers).await?;
 
-        let wallet = if let Some(sk) = secret.clone() {
-            let network = get_evm_network_from_env()?;
-            Some(Wallet::new_from_private_key(network, &sk.to_hex())?)
-        } else {
-            None
+        let mut safe = Safe {
+            client: client,
+            wallet: None,
+            sk: None,
         };
 
-        Ok(Safe {
-            client: client,
-            wallet: wallet,
-            sk: secret,
-        })
+        if let Some(sk) = secret {
+            safe.login(Some(sk))
+        } else {
+            Ok(safe)
+        }
     }
 
-    // if secret is None, it will be randomized.
-    pub fn login(&mut self, secret: Option<SecretKey>) -> Result<Safe> {
-        let sk = secret.unwrap_or(SecretKey::random());
+    // if eth_privkey is None, it will be randomized.
+    pub fn login_with_eth(&mut self, eth_privkey: Option<String>) -> Result<Safe> {
+        let eth_pk = eth_privkey.unwrap_or(SecretKey::random().to_hex()); // bls secret key can be used as eth privkey
+
+        println!("eth_pk: {:?}", eth_pk);
 
         let network = get_evm_network_from_env()?;
-        let wallet = Wallet::new_from_private_key(network, &sk.to_hex())?;
+        let wallet = Wallet::new_from_private_key(network, &eth_pk)?;
+
+        let eth_pk = EvmBytes::from_str(&eth_pk)
+            .map_err(|e| Error::Custom(format!("Eth privkey parse: {}", e)))?;
+        let root_sk = SecretKey::from_hex(ROOT_SK).unwrap();
+        // TODO: is it secure? can it be reverse-engineered, that means derivation index (eth_pk) can be reproduced from derived sk?
+        let sk = root_sk.derive_child(&eth_pk);
+        println!("sk: {:?}", sk);
 
         Ok(Safe {
             client: self.client.clone(),
@@ -92,11 +101,16 @@ impl Safe {
         })
     }
 
+    // if secret is None, it will be randomized.
+    pub fn login(&mut self, secret: Option<SecretKey>) -> Result<Safe> {
+        self.login_with_eth(secret.map(|sk| SecretKey::to_hex(&sk)))
+    }
+
     // allows using XorNameBuilder with Xor when you need a deeper naming structure.
     // when perms is None, only owner can write to the register.
     pub async fn register_create(
         &mut self,
-        data: &[u8],
+        data: Vec<u8>,
         meta: XorName,
         perms: Option<RegisterPermissions>,
     ) -> Result<Register> {
@@ -106,7 +120,7 @@ impl Safe {
             Ok(self
                 .client
                 .register_create_with_permissions(
-                    Bytes::copy_from_slice(data),
+                    data.into(),
                     &format!("{:x}", meta), // convert meta to lower hex string
                     self.sk.clone().unwrap(),
                     perms,
@@ -133,12 +147,12 @@ impl Safe {
         Ok(self.client.register_get(address).await?)
     }
 
-    pub async fn register_write(&self, reg: &Register, data: &[u8]) -> Result<()> {
+    pub async fn register_write(&self, reg: &Register, data: Vec<u8>) -> Result<()> {
         let reg = reg.clone(); // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2396
         if let Some(sk) = &self.sk {
             Ok(self
                 .client
-                .register_update(reg, Bytes::copy_from_slice(data), sk.clone())
+                .register_update(reg, data.into(), sk.clone())
                 .await?)
         } else {
             Err(Error::NotLoggedIn)
