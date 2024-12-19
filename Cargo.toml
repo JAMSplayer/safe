@@ -1,6 +1,6 @@
 [package]
 name = "safe"
-version = "0.1.5"
+version = "0.1.6"
 description = "Simple Safe Network Client"
 edition = "2021"
 

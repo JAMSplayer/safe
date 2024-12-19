@@ -58,6 +58,12 @@ impl From<autonomi::client::registers::RegisterError> for Error {
     }
 }
 
+impl From<autonomi::client::data::PutError> for Error {
+    fn from(err: autonomi::client::data::PutError) -> Self {
+        Error::Custom(format!("put: {}", err))
+    }
+}
+
 impl From<evmlib::utils::Error> for Error {
     fn from(err: evmlib::utils::Error) -> Self {
         Error::Custom(format!("evm utils: {}", err))

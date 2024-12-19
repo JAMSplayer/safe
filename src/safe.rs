@@ -1,6 +1,7 @@
 pub use crate::error::{Error, Result};
 pub use alloy_primitives::Address as EvmAddress;
 pub use autonomi::{
+    client::payment::PaymentOption,
     client::registers::{Register, RegisterAddress, RegisterPermissions},
     Client,
 };
@@ -178,6 +179,16 @@ impl Safe {
         })
     }
 
+    pub async fn upload(&self, data: Vec<u8>) -> Result<XorName> {
+        Ok(self
+            .client
+            .data_put(
+                data.into(),
+                PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
+            )
+            .await?)
+    }
+
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
             ("sn_networking".to_string(), Level::DEBUG),
@@ -240,9 +251,6 @@ pub fn random_register_address() -> RegisterAddress {
 // read_register(address: NetworkAddress) -> Result<Vec<u8>>
 //
 // update_register(new_data: Vec<u8>, address: XorAddress) -> Result<XorAddress>
-//
-// upload_file(data: Vec<u8>) -> Result<XorAddress>
-//      ? already uploaded
 //
 // read_file()
 // → sn_client::file::download::read()
