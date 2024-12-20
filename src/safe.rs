@@ -4,6 +4,7 @@ pub use autonomi::{
     client::payment::PaymentOption,
     client::registers::{Register, RegisterAddress, RegisterPermissions},
     Client,
+    ClientConfig,
 };
 pub use bls::SecretKey;
 pub use evmlib::common::U256;
@@ -12,12 +13,10 @@ pub use xor_name::XorName;
 
 use alloy_primitives::Bytes as EvmBytes;
 use autonomi::{get_evm_network_from_env, Wallet};
-use sn_peers_acquisition::{get_peers_from_url, NETWORK_CONTACTS_URL};
 use std::str::FromStr;
 use std::time::Duration;
 use tracing::Level;
 
-const _CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secred, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
 #[derive(Clone)]
@@ -57,14 +56,11 @@ impl Safe {
         add_network_peers: bool,
         secret: Option<SecretKey>,
     ) -> Result<Safe> {
-        let mut peers = peers.clone();
-        if add_network_peers {
-            let mut net_peers =
-                get_peers_from_url(url::Url::parse(NETWORK_CONTACTS_URL.as_str()).unwrap()).await?;
-            peers.append(&mut net_peers);
-        }
 
-        let client = Client::connect(&peers).await?;
+        let client = Client::init_with_config(ClientConfig {
+            local: !add_network_peers,
+            peers: Some(peers),
+        }).await?;
 
         let mut safe = Safe {
             client: client,
@@ -104,7 +100,7 @@ impl Safe {
 
     // if secret is None, it will be randomized.
     pub fn login(&mut self, secret: Option<SecretKey>) -> Result<Safe> {
-        self.login_with_eth(secret.map(|sk| SecretKey::to_hex(&sk)))
+        self.login_with_eth(secret.map(|sk| SecretKey::to_hex(&sk))) // bls secret key can be used as eth privkey
     }
 
     // allows using XorNameBuilder with Xor when you need a deeper naming structure.
@@ -121,7 +117,7 @@ impl Safe {
             Ok(self
                 .client
                 .register_create_with_permissions(
-                    data.into(),
+                    Some(data.into()),
                     &format!("{:x}", meta), // convert meta to lower hex string
                     self.sk.clone().unwrap(),
                     perms,
@@ -182,7 +178,7 @@ impl Safe {
     pub async fn upload(&self, data: Vec<u8>) -> Result<XorName> {
         Ok(self
             .client
-            .data_put(
+            .data_put_public(
                 data.into(),
                 PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
             )
@@ -191,20 +187,24 @@ impl Safe {
 
     pub fn init_logging() -> Result<()> {
         let logging_targets = vec![
-            ("sn_networking".to_string(), Level::DEBUG),
+//            ("ant_networking".to_string(), Level::DEBUG),
+            ("ant_networking".to_string(), Level::INFO),
             ("safe".to_string(), Level::TRACE),
-            ("sn_build_info".to_string(), Level::TRACE),
-            ("sn_cli".to_string(), Level::TRACE),
+            ("ant_build_info".to_string(), Level::TRACE),
+//            ("autonomi_cli".to_string(), Level::TRACE),
             ("autonomi".to_string(), Level::TRACE),
-            ("sn_logging".to_string(), Level::TRACE),
-            ("sn_peers_acquisition".to_string(), Level::TRACE),
-            ("sn_protocol".to_string(), Level::TRACE),
-            ("sn_registers".to_string(), Level::TRACE),
+            ("ant_logging".to_string(), Level::TRACE),
+//            ("ant_bootstrap".to_string(), Level::TRACE),
+            ("ant_bootstrap".to_string(), Level::DEBUG),
+            ("ant_protocol".to_string(), Level::TRACE),
+            ("ant_registers".to_string(), Level::TRACE),
             ("sn_transfers".to_string(), Level::TRACE),
+            ("ant_evm".to_string(), Level::TRACE),
+            ("evmlib".to_string(), Level::TRACE),
         ];
-        let mut log_builder = sn_logging::LogBuilder::new(logging_targets);
-        log_builder.output_dest(sn_logging::LogOutputDest::Stdout);
-        log_builder.format(sn_logging::LogFormat::Default);
+        let mut log_builder = ant_logging::LogBuilder::new(logging_targets);
+        log_builder.output_dest(ant_logging::LogOutputDest::Stdout);
+        log_builder.format(ant_logging::LogFormat::Default);
         let _ = log_builder
             .initialize()
             .map_err(|e| Error::Custom(format!("logging: {}", e)))?;

@@ -1,6 +1,6 @@
 [package]
 name = "safe"
-version = "0.1.6"
+version = "0.1.7"
 description = "Simple Safe Network Client"
 edition = "2021"
 
@@ -19,11 +19,9 @@ hex = "*"
 url = "*"
 alloy-primitives = "*"
 
-self_encryption = "*"
-sn_peers_acquisition = { version = "*", features = ["network-contacts"] }
-sn_logging = "0.2.40"
-sn_registers = "*"
-autonomi = { version = "0.2.4", features = ["local", "full", "loud"] }
+ant-logging = "0.2.41"
+ant-registers = "*"
+autonomi = { version = "0.3.0", features = ["local", "full", "loud"] }
 evmlib = "*"
 
 [profile.dev]
