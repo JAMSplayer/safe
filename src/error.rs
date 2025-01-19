@@ -41,6 +41,24 @@ impl From<autonomi::client::data::PutError> for Error {
     }
 }
 
+impl From<autonomi::client::data::GetError> for Error {
+    fn from(err: autonomi::client::data::GetError) -> Self {
+        Error::Custom(format!("get: {}", err))
+    }
+}
+
+impl From<autonomi::client::transactions::TransactionError> for Error {
+    fn from(err: autonomi::client::transactions::TransactionError) -> Self {
+        Error::Custom(format!("transaction: {}", err))
+    }
+}
+
+impl From<autonomi::client::vault::VaultError> for Error {
+    fn from(err: autonomi::client::vault::VaultError) -> Self {
+        Error::Custom(format!("vault: {}", err))
+    }
+}
+
 impl From<evmlib::utils::Error> for Error {
     fn from(err: evmlib::utils::Error) -> Self {
         Error::Custom(format!("evm utils: {}", err))

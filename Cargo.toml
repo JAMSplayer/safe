@@ -19,10 +19,11 @@ hex = "*"
 url = "*"
 alloy-primitives = "*"
 
-ant-logging = "0.2.41"
+ant-logging = "*"
 ant-registers = "*"
-autonomi = { version = "0.3.0", features = ["local", "full", "loud"] }
+autonomi = { version = "0.3.4", features = ["local", "full", "loud"] }
 evmlib = "*"
+ant-protocol = "*"
 
 [profile.dev]
 debug = 0
