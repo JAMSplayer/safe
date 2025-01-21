@@ -354,13 +354,23 @@ impl Safe {
             .map(Wallet::address)
     }
 
-    pub async fn balance(&self) -> Result<U256> {
-        Ok(self
-            .wallet
-            .as_ref()
-            .ok_or(Error::NotLoggedIn)?
-            .balance_of_tokens()
-            .await?)
+    pub async fn balance(&self) -> Result<(U256, U256)> {
+        Ok(
+            (self
+                .wallet
+                .as_ref()
+                .ok_or(Error::NotLoggedIn)?
+                .balance_of_tokens()
+                .await?,
+
+            self
+                .wallet
+                .as_ref()
+                .ok_or(Error::NotLoggedIn)?
+                .balance_of_gas_tokens()
+                .await?
+            )
+        )
     }
 
     fn only_owner_can_write(&self) -> Result<RegisterPermissions> {

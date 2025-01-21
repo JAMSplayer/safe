@@ -22,7 +22,7 @@ async fn run() -> Result<()> {
     println!("\n\nSafenet connected.");
 
     println!("\n\nAddress: {}", s.address()?.to_string());
-    println!("\n\nBalance: {}", s.balance().await?);
+    println!("\n\nBalance: {:?}", s.balance().await?);
 
     println!("\n\nCreating random reg ...");
     let reg_xorname = XorNameBuilder::random().build();
@@ -30,7 +30,7 @@ async fn run() -> Result<()> {
     s.reg_create(vec![1,1,1,1,1], &reg_xorname) // TODO: file GitHub issue on not able to save empty data
         .await?;
     println!("\n\nReg created.");
-    println!("\n\nBalance: {}", s.balance().await?);
+    println!("\n\nBalance: {:?}", s.balance().await?);
 
     println!("\n\nReading reg {} ...", reg_xorname);
     let data = s.read_reg(&reg_xorname, None).await?;
@@ -39,7 +39,7 @@ async fn run() -> Result<()> {
     println!("\n\nUpdating reg {} ...", reg_xorname);
     s.reg_write(vec![1,2,3,4,5], &reg_xorname).await?;
     println!("\n\nReg updated.");
-    println!("\n\nBalance: {}", s.balance().await?);
+    println!("\n\nBalance: {:?}", s.balance().await?);
 
     println!("\n\nReading updated reg {} ...", reg_xorname);
     let data = s.read_reg(&reg_xorname, None).await?;
