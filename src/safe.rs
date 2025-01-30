@@ -141,7 +141,7 @@ impl Safe {
 
     pub async fn reg_create(
         &mut self,
-        data: Vec<u8>,
+        data: &[u8],
         meta: &XorName,
     ) -> Result<()> {
 
@@ -213,7 +213,7 @@ impl Safe {
 
     pub async fn reg_write(
         &self,
-        data: Vec<u8>,
+        data: &[u8],
         meta: &XorName,
     ) -> Result<()> {
 
@@ -311,11 +311,11 @@ impl Safe {
         })
     }
 
-    pub async fn upload(&self, data: Vec<u8>) -> Result<XorName> {
+    pub async fn upload(&self, data: &[u8]) -> Result<XorName> {
         Ok(self
             .client
             .data_put_public(
-                data.into(),
+                Bytes::copy_from_slice(data),
                 PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
             )
             .await?)
