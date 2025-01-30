@@ -23,6 +23,12 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 
+impl From<String> for Error {
+    fn from(err: String) -> Self {
+        Error::Custom(err)
+    }
+}
+
 impl From<autonomi::client::ConnectError> for Error {
     fn from(err: autonomi::client::ConnectError) -> Self {
         Error::Custom(format!("connect: {}", err))

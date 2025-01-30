@@ -25,7 +25,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tracing::Level;
 
-const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secred, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
+const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secret, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
 const SAFE_REG_TYPE: u64 = 0x90B2F5FFF5A18393u64; // first 8 bytes of "safe-reg" SHA256 hash
 
@@ -242,7 +242,7 @@ impl Safe {
             tx_key.public_key(),
             vec![],
             data_address.0,
-            vec![], // TODO: can I predict next tx? xorname(meta(i + 1))?
+            vec![],
             &tx_key,
         );
         let tail_tx_xorname = new_tail_tx.address().xorname().to_vec();
@@ -302,8 +302,7 @@ impl Safe {
         println!("\n\nReading data...");
 
         let data_address = XorName(tx.content);
-        let data = self.client.data_get_public(data_address).await?;
-        Ok(data.to_vec())
+        Ok(self.download(&data_address).await?)
     }
 
     pub fn random_register_address(&self) -> Option<RegisterAddress> {
@@ -320,6 +319,11 @@ impl Safe {
                 PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
             )
             .await?)
+    }
+
+    pub async fn download(&self, address: &XorName) -> Result<Vec<u8>> {
+        let data = self.client.data_get_public(address.clone()).await?;
+        Ok(data.to_vec()) // TODO: Vec instead of Bytes result in Autonomi API
     }
 
     pub fn init_logging() -> Result<()> {
@@ -388,18 +392,6 @@ pub fn random_register_address() -> RegisterAddress {
     )
 }
 
-// create_register(address: Option<XorAddress>, data: Vec<u8>) -> Result<XorAddress>
-//      ! if address is None, that means it should be assigned a random address
-//      ? exists / squatted
-//
-// read_register(meta: XorName) -> Result<Vec<u8>>
-// read_register(address: NetworkAddress) -> Result<Vec<u8>>
-//
-// update_register(new_data: Vec<u8>, address: XorAddress) -> Result<XorAddress>
-//
-// read_file()
-// → sn_client::file::download::read()
-//
 
 // Add optional maxium price caller agrees to pay for operation.
 // A "limit exceeded" error as a possible Result
