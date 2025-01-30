@@ -45,6 +45,15 @@ async fn run() -> Result<()> {
     let data = s.read_reg(&reg_xorname, None).await?;
     println!("\n\nNew reg data: {:?} ...", data);
 
+    println!("\n\nUploading data...");
+    let data_xorname = s.upload(&[9, 8, 7, 6, 5, 4, 3, 2, 1]).await?;
+    println!("\n\nUploaded.");
+    println!("\n\nBalance: {:?}", s.balance().await?);
+
+    println!("\n\nDownloading data {} ...", data_xorname);
+    let data = s.download(&data_xorname).await?;
+    println!("\n\nDownloaded data: {:?} ...", data);
+
     Ok(())
 }
 
