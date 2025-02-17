@@ -1,6 +1,6 @@
 [package]
 name = "safe"
-version = "0.1.9"
+version = "0.2.0"
 description = "Simple Safe Network Client"
 edition = "2021"
 
@@ -8,7 +8,7 @@ edition = "2021"
 tokio = "*"
 bytes = { version = "*", features = ["serde"] }
 tracing = "*"
-rand = "*"
+rand = "0.8.5"
 xor_name = "*"
 libp2p = { version="*", features = ["serde"] }
 bls = { package = "blsttc", version = "*" }
