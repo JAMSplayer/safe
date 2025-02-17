@@ -35,33 +35,27 @@ impl From<autonomi::client::ConnectError> for Error {
     }
 }
 
-impl From<autonomi::client::registers::RegisterError> for Error {
-    fn from(err: autonomi::client::registers::RegisterError) -> Self {
-        Error::Custom(format!("register: {}", err))
-    }
-}
-
-impl From<autonomi::client::data::PutError> for Error {
-    fn from(err: autonomi::client::data::PutError) -> Self {
+impl From<autonomi::client::PutError> for Error {
+    fn from(err: autonomi::client::PutError) -> Self {
         Error::Custom(format!("put: {}", err))
     }
 }
 
-impl From<autonomi::client::data::GetError> for Error {
-    fn from(err: autonomi::client::data::GetError) -> Self {
+impl From<autonomi::client::GetError> for Error {
+    fn from(err: autonomi::client::GetError) -> Self {
         Error::Custom(format!("get: {}", err))
     }
 }
 
-impl From<autonomi::client::transactions::TransactionError> for Error {
-    fn from(err: autonomi::client::transactions::TransactionError) -> Self {
+impl From<autonomi::client::data_types::graph::GraphError> for Error {
+    fn from(err: autonomi::client::data_types::graph::GraphError) -> Self {
         Error::Custom(format!("transaction: {}", err))
     }
 }
 
-impl From<autonomi::client::vault::VaultError> for Error {
-    fn from(err: autonomi::client::vault::VaultError) -> Self {
-        Error::Custom(format!("vault: {}", err))
+impl From<autonomi::pointer::PointerError> for Error {
+    fn from(err: autonomi::pointer::PointerError) -> Self {
+        Error::Custom(format!("pointer: {}", err))
     }
 }
 
@@ -82,3 +76,10 @@ impl From<evmlib::contract::network_token::Error> for Error {
         Error::Custom(format!("evm token: {}", err))
     }
 }
+
+impl From<rmp_serde::decode::Error> for Error {
+    fn from(err: rmp_serde::decode::Error) -> Self {
+        Error::Custom(format!("decode: {}", err))
+    }
+}
+

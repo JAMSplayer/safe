@@ -6,22 +6,17 @@ edition = "2021"
 
 [dependencies]
 tokio = "*"
-bytes = { version = "1.0.1", features = ["serde"] }
-serde = "1.0.130"
+bytes = { version = "*", features = ["serde"] }
 tracing = "*"
-rand = "0.8.5"
-xor_name = "5.0.0"
-
-libp2p = { version="0.53", features = ["serde"] }
-bls = { package = "blsttc", version = "8.0.1" }
-tiny-keccak = { version = "*", features = [ "sha3" ] }
-hex = "*"
-url = "*"
+rand = "*"
+xor_name = "*"
+libp2p = { version="*", features = ["serde"] }
+bls = { package = "blsttc", version = "*" }
 alloy-primitives = "*"
+rmp-serde = "*"
 
 ant-logging = "*"
-ant-registers = "*"
-autonomi = { version = "0.3.4", features = ["local", "full", "loud"] }
+autonomi = { version = "0.3.6", features = ["loud"] }
 evmlib = "*"
 ant-protocol = "*"
 

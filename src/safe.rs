@@ -1,7 +1,6 @@
 pub use crate::error::{Error, Result};
 pub use alloy_primitives::Address as EvmAddress;
 pub use autonomi::{
-    client::registers::{Register, RegisterAddress, RegisterPermissions},
     Client,
 };
 pub use bls::SecretKey;
@@ -10,27 +9,27 @@ pub use libp2p::Multiaddr;
 pub use xor_name::XorName;
 
 use alloy_primitives::Bytes as EvmBytes;
-use ant_protocol::storage::TransactionAddress;
 use autonomi::{
-    get_evm_network_from_env,
+    get_evm_network,
     Wallet,
-    client::{
-        payment::PaymentOption,
-        transactions::Transaction,
-    },
     ClientConfig,
+    GraphEntry,
+    pointer::PointerTarget,
+    PointerAddress,
+    GraphEntryAddress,
+    graph::GraphError,
+    Network,
+    client::payment::PaymentOption,
 };
 use bytes::Bytes;
 use std::str::FromStr;
-use std::time::Duration;
 use tracing::Level;
 
 const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secret, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
-const SAFE_REG_TYPE: u64 = 0x90B2F5FFF5A18393u64; // first 8 bytes of "safe-reg" SHA256 hash
-
 #[derive(Clone)]
 pub struct Safe {
+    evm_network: Network,
     client: Client,
     wallet: Option<Wallet>,
     sk: Option<SecretKey>,
@@ -67,12 +66,17 @@ impl Safe {
         secret: Option<SecretKey>,
     ) -> Result<Safe> {
 
+        let network = get_evm_network(!add_network_peers)?;
+
         let client = Client::init_with_config(ClientConfig {
             local: !add_network_peers,
             peers: Some(peers),
+            evm_network: network.clone(),
+            strategy: Default::default(),
         }).await?;
 
         let mut safe = Safe {
+            evm_network: network,
             client: client,
             wallet: None,
             sk: None,
@@ -91,8 +95,7 @@ impl Safe {
 
         println!("\n\neth_pk: {:?}", eth_pk);
 
-        let network = get_evm_network_from_env()?;
-        let wallet = Wallet::new_from_private_key(network, &eth_pk)?;
+        let wallet = Wallet::new_from_private_key(self.evm_network.clone(), &eth_pk)?;
 
         let eth_pk = EvmBytes::from_str(&eth_pk)
             .map_err(|e| Error::Custom(format!("Eth privkey parse: {}", e)))?;
@@ -102,6 +105,7 @@ impl Safe {
         println!("\n\nsk: {:?}", sk);
 
         Ok(Safe {
+            evm_network: self.evm_network.clone(),
             client: self.client.clone(),
             wallet: Some(wallet),
             sk: Some(sk),
@@ -113,102 +117,40 @@ impl Safe {
         self.login_with_eth(secret.map(|sk| SecretKey::to_hex(&sk))) // bls secret key can be used as eth privkey
     }
 
-    // allows using XorNameBuilder with Xor when you need a deeper naming structure.
-    // when perms is None, only owner can write to the register.
-    pub async fn register_create(
-        &mut self,
-        data: Vec<u8>,
-        meta: &XorName,
-        perms: Option<RegisterPermissions>,
-    ) -> Result<Register> {
-        let perms = perms.unwrap_or(self.only_owner_can_write()?);
-
-        if let Some(_) = self.wallet.as_ref().and(self.sk.as_ref()) {
-            Ok(self
-                .client
-                .register_create_with_permissions(
-                    Some(data.into()),
-                    &format!("{:x}", meta), // convert meta to lower hex string
-                    self.sk.clone().unwrap(),
-                    perms,
-                    self.wallet.as_ref().unwrap(),
-                )
-                .await?)
-        } else {
-            Err(Error::NotLoggedIn)
-        }
-    }
-
     pub async fn reg_create(
         &mut self,
         data: &[u8],
         meta: &XorName,
     ) -> Result<()> {
 
-//        if self.sk.is_none() || self.wallet.is_none() {
-//            return Err(Error::NotLoggedIn);
-//        }
+        println!("\n\nUploading data: {:?}...", data);
 
-        println!("\n\nUploading data...");
-
-        // put data into chunk
         let data_address = self.upload(data).await?;
 
-        println!("\n\nCreating transaction...");
+        println!("\n\nCreating graph entry...");
 
-        // create transaction
-        let tx_meta = registers::XorNameBuilder::from(meta).with_str("0").build();
-        let tx_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&tx_meta);
-        let tx = Transaction::new(
-            tx_key.public_key(),
+        let ge_meta = registers::XorNameBuilder::from(meta).with_str("0").build();
+        let ge_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&ge_meta);
+        let ge = GraphEntry::new(
+            &ge_key,
             vec![],
             data_address.0,
             vec![],
-            &tx_key,
         );
-        self.client.transaction_put(tx, &self.wallet.clone().ok_or(Error::NotLoggedIn)?).await?; // TODO: what will happen if someone already created a transaction under this address? we have to proceed then to next step, in case when creating a Reg failed at the Vault creation step last time, and now we want to retry that.
+        let (_attos, _xorname) = self.client.graph_entry_put(ge, PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?)).await?; // TODO: what will happen if someone already created a graph entry under this address? we have to proceed then to next step, in case when creating a Reg failed at the pointer creation step last time, and now we want to retry that.
 
-        println!("\n\nCreating vault...");
+        println!("\n\nCreating counter pointer...");
 
-        // create vault
-        let vault_meta = registers::XorNameBuilder::from(meta)
+        let pointer_meta = registers::XorNameBuilder::from(meta)
                 .with_str("counter").build();
-        let vault_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&vault_meta);
-        let _attos = self.client.write_bytes_to_vault(
-            Bytes::new(),
+        let pointer_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&pointer_meta);
+        let (_attos, _address) = self.client.pointer_create(
+            &pointer_key,
+            PointerTarget::PointerAddress(PointerAddress::from_owner(pointer_key.public_key())), // todo: ZERO target, https://github.com/maidsafe/autonomi/issues/2735
             PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
-            &vault_key,
-            SAFE_REG_TYPE,
         ).await?;
 
         Ok(())
-    }
-
-    pub async fn open_own_register(&self, meta: XorName) -> Result<Register> {
-        match &self.sk {
-            Some(sk) => {
-                let meta = registers::XorNameBuilder::from_str(&format!("{:x}", meta)).build(); // forced by all autonomi api requiring names as strings
-                self.open_register(RegisterAddress::new(meta, sk.public_key()))
-                    .await
-            }
-            None => Err(Error::NotLoggedIn),
-        }
-    }
-
-    pub async fn open_register(&self, address: RegisterAddress) -> Result<Register> {
-        Ok(self.client.register_get(address).await?)
-    }
-
-    pub async fn register_write(&self, reg: &Register, data: Vec<u8>) -> Result<()> {
-        let reg = reg.clone(); // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2396
-        if let Some(sk) = &self.sk {
-            Ok(self
-                .client
-                .register_update(reg, data.into(), sk.clone())
-                .await?)
-        } else {
-            Err(Error::NotLoggedIn)
-        }
     }
 
     pub async fn reg_write(
@@ -217,112 +159,93 @@ impl Safe {
         meta: &XorName,
     ) -> Result<()> {
 
-        println!("\n\nGetting count scratchpad...");
+        println!("\n\nGetting counter pointer...");
 
-        let vault_meta = registers::XorNameBuilder::from(meta)
+        let pointer_meta = registers::XorNameBuilder::from(meta)
                 .with_str("counter").build();
-        let vault_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&vault_meta);
-        let vault = self.client.get_or_create_scratchpad(&vault_key, SAFE_REG_TYPE).await?;
-        if vault.1 { // is new
-            return Err(Error::Custom(format!("Could not find vault: {:?}", vault_key))); // TODO: in next release there will be get_vault_from_network function that errors, when cannot find vault
-        }
+        let pointer_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&pointer_meta);
+        let pointer = self.client.pointer_get(&PointerAddress::from_owner(pointer_key.public_key())).await?;
 
         println!("\n\nWriting data...");
 
         let data_address = self.upload(data).await?;
 
-        println!("\n\nNew transaction...");
+        println!("\n\nNew graph entry...");
 
-        let tx_index = vault.0.count();
-        println!("tx_index {}", tx_index);
-        let tx_meta = registers::XorNameBuilder::from(meta)
-                .with_str(&format!("{}", tx_index)).build();
-        let tx_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&tx_meta);
-        let new_tail_tx = Transaction::new(
-            tx_key.public_key(),
+        let ge_index = pointer.counter();
+        println!("ge_index {}", ge_index);
+        let ge_meta = registers::XorNameBuilder::from(meta)
+                .with_str(&format!("{}", ge_index)).build();
+        let ge_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&ge_meta);
+        let new_tail_ge = GraphEntry::new(
+            &ge_key,
             vec![],
             data_address.0,
             vec![],
-            &tx_key,
         );
-        let tail_tx_xorname = new_tail_tx.address().xorname().to_vec();
-        self.client.transaction_put(new_tail_tx, &self.wallet.clone().ok_or(Error::NotLoggedIn)?).await?; // TODO: what will happen if someone already created a transaction under this address? we have to proceed then to next step, in case when creating a Reg failed at the Vault creation step last time, and now we want to retry that.
+//        let tail_ge_xorname = new_tail_ge.address().xorname().to_vec();
+        let (_attos, _xorname) = self.client.graph_entry_put(new_tail_ge, PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?)).await?; // TODO: what will happen if someone already created a graph entry under this address? we have to proceed then to next step, in case when creating a Reg failed at the pointer creation step last time, and now we want to retry that.
 
-        println!("\n\nIncrementing count scratchpad...");
+        println!("\n\nIncrementing counter pointer...");
 
-        let _attos = self.client.write_bytes_to_vault(
-            Bytes::new(),
-            PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
-            &vault_key,
-            SAFE_REG_TYPE,
+        self.client.pointer_update(
+            &pointer_key,
+            PointerTarget::PointerAddress(PointerAddress::from_bytes(&[])?), // ZERO target
         ).await?;
 
         Ok(())
     }
 
-    // In case of multiple branches, register is merged with one of the entries copied on top.
-    pub async fn read_register(reg: &mut Register, version: u32) -> Result<Option<Vec<u8>>> {
-        if version > 0 {
-            return Err(Error::Custom(String::from(
-                "Registers versioning is not yet supported.",
-            )));
-        };
+    pub async fn read_reg(&self, meta: &XorName, version: Option<u32>) -> Result<Vec<u8>> {
 
-        let entries = reg.values();
-
-        Ok(entries.iter().next().map(|bytes| bytes.to_vec()))
-    }
-
-    pub async fn read_reg(&self, meta: &XorName, version: Option<u64>) -> Result<Vec<u8>> {
-
-        let version: u64 = if let Some(v) = version {
+        let version: u32 = if let Some(v) = version {
             v
         } else {
-            println!("\n\nReading vault...");
-            let vault_meta = registers::XorNameBuilder::from(meta)
+            println!("\n\nReading counter pointer...");
+            let pointer_meta = registers::XorNameBuilder::from(meta)
                     .with_str("counter").build();
-            let vault_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&vault_meta);
-            let vault = self.client.get_or_create_scratchpad(&vault_key, SAFE_REG_TYPE).await?;
-            if vault.1 { // is new
-                return Err(Error::Custom(format!("Could not find vault: {:?}", vault_key))); // TODO: in next release there will be get_vault_from_network function that errors, when cannot find vault
-            }
-            vault.0.count() - 1
+            let pointer_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&pointer_meta);
+            let pointer = self.client.pointer_get(&PointerAddress::from_owner(pointer_key.public_key())).await?;
+
+            pointer.counter() - 1
         };
 
-        println!("\n\nReading transaction...");
+        println!("\n\nReading graph entry...");
         println!("version {}", version);
 
-        let tx_meta = registers::XorNameBuilder::from(meta)
+        let ge_meta = registers::XorNameBuilder::from(meta)
                 .with_str(&format!("{}", version)).build();
-        let tx_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&tx_meta);
-        let txs = self.client.transaction_get(TransactionAddress::from_owner(tx_key.public_key())).await?;
-        let tx = txs.first().ok_or(Error::Custom(format!("No transaction for version {}", version)))?;
-        // TODO: handle multiple transactions returned. Merge branches? Put all leaves as parents?
+        let ge_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&ge_meta);
+        let gentriess = self.client.graph_entry_get(&GraphEntryAddress::from_owner(ge_key.public_key())).await;
+        let ge = match gentriess {
+            Ok(e) => e,
+            Err(GraphError::Fork(entries)) => {
+                entries.first().ok_or(Error::Custom(format!("No GraphEntry for version {}", version)))?.clone()
+            },
+            Err(e) => {
+                return Err(Error::Custom(format!("Error reading GraphEntry: {}", e)));
+            },
+        };
 
         println!("\n\nReading data...");
 
-        let data_address = XorName(tx.content);
+        let data_address = XorName(ge.content);
         Ok(self.download(&data_address).await?)
     }
 
-    pub fn random_register_address(&self) -> Option<RegisterAddress> {
-        self.sk.as_ref().map(|sk| {
-            RegisterAddress::new(XorName::random(&mut rand::thread_rng()), sk.public_key())
-        })
-    }
-
     pub async fn upload(&self, data: &[u8]) -> Result<XorName> {
-        Ok(self
+        let (_attos, xorname) = self
             .client
             .data_put_public(
                 Bytes::copy_from_slice(data),
                 PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
             )
-            .await?)
+            .await?;
+        Ok(xorname)
     }
 
     pub async fn download(&self, address: &XorName) -> Result<Vec<u8>> {
-        let data = self.client.data_get_public(address.clone()).await?;
+        let data = self.client.data_get_public(address).await?;
         Ok(data.to_vec()) // TODO: Vec instead of Bytes result in Autonomi API
     }
 
@@ -377,19 +300,6 @@ impl Safe {
         )
     }
 
-    fn only_owner_can_write(&self) -> Result<RegisterPermissions> {
-        self.sk
-            .as_ref()
-            .ok_or(Error::NotLoggedIn)
-            .map(|sk| RegisterPermissions::new_with([sk.public_key()]))
-    }
-}
-
-pub fn random_register_address() -> RegisterAddress {
-    RegisterAddress::new(
-        XorName::random(&mut rand::thread_rng()),
-        Client::register_generate_key().public_key(),
-    )
 }
 
 
