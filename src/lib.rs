@@ -1,4 +1,5 @@
 mod error;
+mod logging;
 mod safe;
 
 pub use safe::*;

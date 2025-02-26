@@ -1,8 +1,6 @@
 pub use crate::error::{Error, Result};
+pub use crate::logging::{init_logging, LoggingHandle};
 pub use alloy_primitives::Address as EvmAddress;
-pub use autonomi::{
-    Client,
-};
 pub use bls::SecretKey;
 pub use evmlib::common::U256;
 pub use libp2p::Multiaddr;
@@ -10,6 +8,7 @@ pub use xor_name::XorName;
 
 use alloy_primitives::Bytes as EvmBytes;
 use autonomi::{
+    Client,
     get_evm_network,
     Wallet,
     ClientConfig,
@@ -23,7 +22,6 @@ use autonomi::{
 };
 use bytes::Bytes;
 use std::str::FromStr;
-use tracing::Level;
 
 const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secret, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
@@ -247,31 +245,6 @@ impl Safe {
     pub async fn download(&self, address: &XorName) -> Result<Vec<u8>> {
         let data = self.client.data_get_public(address).await?;
         Ok(data.to_vec()) // TODO: Vec instead of Bytes result in Autonomi API
-    }
-
-    pub fn init_logging() -> Result<()> {
-        let logging_targets = vec![
-//            ("ant_networking".to_string(), Level::DEBUG),
-            ("ant_networking".to_string(), Level::INFO),
-            ("safe".to_string(), Level::TRACE),
-            ("ant_build_info".to_string(), Level::TRACE),
-            ("autonomi".to_string(), Level::TRACE),
-            ("ant_logging".to_string(), Level::TRACE),
-//            ("ant_bootstrap".to_string(), Level::TRACE),
-            ("ant_bootstrap".to_string(), Level::DEBUG),
-            ("ant_protocol".to_string(), Level::TRACE),
-            ("ant_registers".to_string(), Level::TRACE),
-            ("ant_evm".to_string(), Level::TRACE),
-            ("evmlib".to_string(), Level::TRACE),
-        ];
-        let mut log_builder = ant_logging::LogBuilder::new(logging_targets);
-        log_builder.output_dest(ant_logging::LogOutputDest::Stdout);
-        log_builder.format(ant_logging::LogFormat::Default);
-        let _ = log_builder
-            .initialize()
-            .map_err(|e| Error::Custom(format!("logging: {}", e)))?;
-
-        Ok(())
     }
 
     pub fn address(&self) -> Result<EvmAddress> {
