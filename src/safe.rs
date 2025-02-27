@@ -1,11 +1,11 @@
 pub use crate::error::{Error, Result};
-pub use crate::logging::{init_logging, LoggingHandle};
 pub use alloy_primitives::Address as EvmAddress;
 pub use bls::SecretKey;
 pub use evmlib::common::U256;
 pub use libp2p::Multiaddr;
 pub use xor_name::XorName;
 
+use crate::logging::{logging, LoggingHandle};
 use alloy_primitives::Bytes as EvmBytes;
 use autonomi::{
     Client,
@@ -25,12 +25,12 @@ use std::str::FromStr;
 
 const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secret, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
-#[derive(Clone)]
 pub struct Safe {
     evm_network: Network,
     client: Client,
     wallet: Option<Wallet>,
     sk: Option<SecretKey>,
+    log_handle: Option<LoggingHandle>,
 }
 
 // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2329
@@ -62,8 +62,10 @@ impl Safe {
         peers: Vec<Multiaddr>,
         add_network_peers: bool,
         secret: Option<SecretKey>,
+        log_level: String,
     ) -> Result<Safe> {
 
+        let log_handle = logging(log_level, None)?;
         let network = get_evm_network(!add_network_peers)?;
 
         let client = Client::init_with_config(ClientConfig {
@@ -78,17 +80,18 @@ impl Safe {
             client: client,
             wallet: None,
             sk: None,
+            log_handle,
         };
 
         if let Some(sk) = secret {
-            safe.login(Some(sk))
-        } else {
-            Ok(safe)
+            safe.login(Some(sk))?;
         }
+
+        Ok(safe)
     }
 
     // if eth_privkey is None, it will be randomized.
-    pub fn login_with_eth(&mut self, eth_privkey: Option<String>) -> Result<Safe> {
+    pub fn login_with_eth(&mut self, eth_privkey: Option<String>) -> Result<()> {
         let eth_pk = eth_privkey.unwrap_or(SecretKey::random().to_hex()); // bls secret key can be used as eth privkey
 
         println!("\n\neth_pk: {:?}", eth_pk);
@@ -102,17 +105,19 @@ impl Safe {
         let sk = root_sk.derive_child(&eth_pk);
         println!("\n\nsk: {:?}", sk);
 
-        Ok(Safe {
-            evm_network: self.evm_network.clone(),
-            client: self.client.clone(),
-            wallet: Some(wallet),
-            sk: Some(sk),
-        })
+        self.wallet = Some(wallet);
+        self.sk = Some(sk);
+        Ok(())
     }
 
     // if secret is None, it will be randomized.
-    pub fn login(&mut self, secret: Option<SecretKey>) -> Result<Safe> {
+    pub fn login(&mut self, secret: Option<SecretKey>) -> Result<()> {
         self.login_with_eth(secret.map(|sk| SecretKey::to_hex(&sk))) // bls secret key can be used as eth privkey
+    }
+
+    pub fn log_level(&mut self, level: String) -> Result<()> {
+        let _ = logging(level, self.log_handle.as_ref());
+        Ok(())
     }
 
     pub async fn reg_create(
