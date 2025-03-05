@@ -18,7 +18,8 @@ use autonomi::{
     GraphEntryAddress,
     graph::GraphError,
     Network,
-    client::payment::PaymentOption,
+    client::{payment::PaymentOption, data::DataAddress},
+    PublicKey,
 };
 use bytes::Bytes;
 use std::str::FromStr;
@@ -149,7 +150,7 @@ impl Safe {
         let pointer_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&pointer_meta);
         let (_attos, _address) = self.client.pointer_create(
             &pointer_key,
-            PointerTarget::PointerAddress(PointerAddress::from_owner(pointer_key.public_key())), // todo: ZERO target, https://github.com/maidsafe/autonomi/issues/2735
+            PointerTarget::PointerAddress(PointerAddress::new(pointer_key.public_key().derive_child("DUMMY".as_bytes()))),
             PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
         ).await?;
 
@@ -167,7 +168,7 @@ impl Safe {
         let pointer_meta = registers::XorNameBuilder::from(meta)
                 .with_str("counter").build();
         let pointer_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&pointer_meta);
-        let pointer = self.client.pointer_get(&PointerAddress::from_owner(pointer_key.public_key())).await?;
+        let pointer = self.client.pointer_get(&PointerAddress::new(pointer_key.public_key())).await?;
 
         println!("\n\nWriting data...");
 
@@ -175,7 +176,7 @@ impl Safe {
 
         println!("\n\nNew graph entry...");
 
-        let ge_index = pointer.counter();
+        let ge_index = pointer.counter() + 1;
         println!("ge_index {}", ge_index);
         let ge_meta = registers::XorNameBuilder::from(meta)
                 .with_str(&format!("{}", ge_index)).build();
@@ -193,7 +194,7 @@ impl Safe {
 
         self.client.pointer_update(
             &pointer_key,
-            PointerTarget::PointerAddress(PointerAddress::from_bytes(&[])?), // ZERO target
+            PointerTarget::PointerAddress(PointerAddress::new(pointer_key.public_key().derive_child("DUMMY".as_bytes()))),
         ).await?;
 
         Ok(())
@@ -208,9 +209,9 @@ impl Safe {
             let pointer_meta = registers::XorNameBuilder::from(meta)
                     .with_str("counter").build();
             let pointer_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&pointer_meta);
-            let pointer = self.client.pointer_get(&PointerAddress::from_owner(pointer_key.public_key())).await?;
+            let pointer = self.client.pointer_get(&PointerAddress::new(pointer_key.public_key())).await?;
 
-            pointer.counter() - 1
+            pointer.counter()
         };
 
         println!("\n\nReading graph entry...");
@@ -219,7 +220,7 @@ impl Safe {
         let ge_meta = registers::XorNameBuilder::from(meta)
                 .with_str(&format!("{}", version)).build();
         let ge_key = self.sk.clone().ok_or(Error::NotLoggedIn)?.derive_child(&ge_meta);
-        let gentriess = self.client.graph_entry_get(&GraphEntryAddress::from_owner(ge_key.public_key())).await;
+        let gentriess = self.client.graph_entry_get(&GraphEntryAddress::new(ge_key.public_key())).await;
         let ge = match gentriess {
             Ok(e) => e,
             Err(GraphError::Fork(entries)) => {
@@ -233,22 +234,22 @@ impl Safe {
         println!("\n\nReading data...");
 
         let data_address = XorName(ge.content);
-        Ok(self.download(&data_address).await?)
+        Ok(self.download(data_address).await?)
     }
 
     pub async fn upload(&self, data: &[u8]) -> Result<XorName> {
-        let (_attos, xorname) = self
+        let (_attos, address) = self
             .client
             .data_put_public(
                 Bytes::copy_from_slice(data),
                 PaymentOption::Wallet(self.wallet.clone().ok_or(Error::NotLoggedIn)?),
             )
             .await?;
-        Ok(xorname)
+        Ok(*address.xorname())
     }
 
-    pub async fn download(&self, address: &XorName) -> Result<Vec<u8>> {
-        let data = self.client.data_get_public(address).await?;
+    pub async fn download(&self, xorname: XorName) -> Result<Vec<u8>> {
+        let data = self.client.data_get_public(&DataAddress::new(xorname)).await?;
         Ok(data.to_vec()) // TODO: Vec instead of Bytes result in Autonomi API
     }
 

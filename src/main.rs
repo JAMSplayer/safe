@@ -12,11 +12,9 @@ async fn run() -> Result<()> {
             .unwrap(); // local testnet
     peers.push(addr);
 
-    Safe::init_logging()?;
-
     println!("\n\nConnecting with peers: {:?} ...", &peers);
-    let mut s = Safe::connect(peers, false, None).await?;
-    s = s.login_with_eth(Some(String::from(
+    let mut s = Safe::connect(peers, false, None, "INFO".into()).await?;
+    s.login_with_eth(Some(String::from(
         "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
     )))?;
     println!("\n\nSafenet connected.");
@@ -51,7 +49,7 @@ async fn run() -> Result<()> {
     println!("\n\nBalance: {:?}", s.balance().await?);
 
     println!("\n\nDownloading data {} ...", data_xorname);
-    let data = s.download(&data_xorname).await?;
+    let data = s.download(data_xorname).await?;
     println!("\n\nDownloaded data: {:?} ...", data);
 
     Ok(())
