@@ -12,6 +12,7 @@ use autonomi::{
     get_evm_network,
     Wallet,
     ClientConfig,
+    InitialPeersConfig,
     GraphEntry,
     pointer::PointerTarget,
     PointerAddress,
@@ -70,8 +71,11 @@ impl Safe {
         let network = get_evm_network(!add_network_peers)?;
 
         let client = Client::init_with_config(ClientConfig {
-            local: !add_network_peers,
-            peers: Some(peers),
+            init_peers_config: InitialPeersConfig {
+                addrs: peers,
+                local: !add_network_peers,
+                ..Default::default()
+            },
             evm_network: network.clone(),
             strategy: Default::default(),
         }).await?;

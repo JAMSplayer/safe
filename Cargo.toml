@@ -16,7 +16,7 @@ alloy-primitives = "*"
 rmp-serde = "*"
 
 ant-logging = "*"
-autonomi = { version = "0.4.0", features = ["loud"] }
+autonomi = { version = "0.4.2", features = ["loud"] }
 evmlib = "*"
 ant-protocol = "*"
 
