@@ -35,6 +35,23 @@ pub struct Safe {
     log_handle: Option<LoggingHandle>,
 }
 
+impl std::fmt::Debug for Safe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        let walllet_debug: String = self.wallet.clone().map(
+            |w| format!("Some(Wallet {{ address: {:?} }})", w.address())
+        ).unwrap_or("None".to_string());
+
+        f.debug_struct("Safe")
+            .field("evm_network", &format!("{:?}", self.evm_network))
+            .field("client", &"Client { ... }")
+            .field("wallet", &walllet_debug)
+            .field("sk", &format!("{:?}", self.sk))
+            .field("log_handle", match &self.log_handle { Some(_) => &"Some(LoggingHandle { ... })", None => &"None" })
+            .finish()
+    }
+}
+
 // TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2329
 //
 //pub type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
