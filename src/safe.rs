@@ -20,7 +20,6 @@ use autonomi::{
     graph::GraphError,
     Network,
     client::{payment::PaymentOption, data::DataAddress},
-    PublicKey,
 };
 use bytes::Bytes;
 use std::str::FromStr;
@@ -51,29 +50,6 @@ impl std::fmt::Debug for Safe {
             .finish()
     }
 }
-
-// TODO: wait for resolving upstream issue: https://github.com/maidsafe/safe_network/issues/2329
-//
-//pub type PaymentResult<T> = Result<(T, NanoTokens, NanoTokens)>;
-//
-//pub fn add_payment<T>(
-//    pr: PaymentResult<T>,
-//    other_cost: NanoTokens,
-//    other_royalties: NanoTokens,
-//) -> PaymentResult<T> {
-//    if let Ok((v, cost, royalties)) = pr {
-//        Ok((
-//            v,
-//            cost.checked_add(other_cost)
-//                .ok_or(Error::Custom("Overflow".to_string()))?,
-//            royalties
-//                .checked_add(other_royalties)
-//                .ok_or(Error::Custom("Overflow".to_string()))?,
-//        ))
-//    } else {
-//        pr
-//    }
-//}
 
 impl Safe {
     // if secret is None, will connect without logging in
@@ -365,7 +341,6 @@ pub mod registers {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::Client;
         use xor_name::XorName;
 
         #[test]
@@ -385,13 +360,6 @@ pub mod registers {
                 .build();
 
             assert_eq!(x2.0, x3.0);
-        }
-
-        #[test]
-        fn xorname_from_string_autonomi() {
-            let x1 = XorNameBuilder::from_str("test").build();
-            let x2 = Client::register_address("test", &Client::register_generate_key()).meta();
-            assert_eq!(x1.0, x2.0);
         }
     }
 }
