@@ -15,6 +15,12 @@ bls = { package = "blsttc", version = "*" }
 alloy-primitives = "*"
 rmp-serde = "*"
 
+argon2 = "0.5"
+password-hash = "0.5"
+aes-gcm = "*"
+serde_json = "1"
+serde = "*"
+
 ant-logging = "*"
 autonomi = { version = "0.4.3", features = ["loud"] }
 evmlib = "*"

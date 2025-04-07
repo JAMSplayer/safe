@@ -92,7 +92,7 @@ impl Safe {
     pub fn login_with_eth(&mut self, eth_privkey: Option<String>) -> Result<()> {
         let eth_pk = eth_privkey.unwrap_or(SecretKey::random().to_hex()); // bls secret key can be used as eth privkey
 
-        println!("\n\neth_pk: {:?}", eth_pk);
+        println!("\n\neth_pk: {:.4}(...)", eth_pk);
 
         let wallet = Wallet::new_from_private_key(self.evm_network.clone(), &eth_pk)?;
 

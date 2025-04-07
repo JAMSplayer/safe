@@ -6,6 +6,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     NotConnected,
     NotLoggedIn,
+    BadPassword,
+    SecretKeyEncryption(String),
     Custom(String),
 }
 
