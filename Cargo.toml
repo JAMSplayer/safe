@@ -1,6 +1,6 @@
 [package]
 name = "safe_api"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2021"
 description = "Simple Autonomi Network Client"
 authors = ["loziniak"]
