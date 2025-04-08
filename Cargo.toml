@@ -1,8 +1,13 @@
 [package]
-name = "safe"
+name = "safe_api"
 version = "0.2.4"
-description = "Simple Safe Network Client"
 edition = "2021"
+description = "Simple Autonomi Network Client"
+authors = ["loziniak"]
+license = "GPL-3.0"
+repository = "https://github.com/JAMSplayer/safe"
+keywords = ["autonomi", "p2p", "DePin"]
+categories = ["api-bindings", "cryptography", "data-structures", "security"]
 
 [dependencies]
 tokio = "*"
