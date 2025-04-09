@@ -1,7 +1,7 @@
 use std::{path::Path, process::ExitCode};
 use tokio::runtime::Runtime;
 
-use safe_api::{Safe, XorNameBuilder, Multiaddr, Result, SecretKey};
+use safeapi::{Safe, XorNameBuilder, Multiaddr, Result, SecretKey};
 
 async fn run() -> Result<()> {
     let mut peers = Vec::new();

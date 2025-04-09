@@ -29,13 +29,13 @@ pub const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a
 /// An alternative Autonomi API
 ///
 /// ```no_run
-/// use safe_api::{Safe, XorNameBuilder};
+/// use safeapi::{Safe, XorNameBuilder};
 /// # use tokio;
 ///
 /// # #[tokio::main]
-/// # async fn main() -> Result<(), safe_api::Error> {
+/// # async fn main() -> Result<(), safeapi::Error> {
 /// // connect to mainnet
-/// let mut safe = Safe::connect(vec![], true, None, "INFO".to_string()).await?;
+/// let mut safe = Safe::connect(vec![], true, None, "INFO").await?;
 ///
 /// # let key_data = std::fs::read("/encrypted/secret_key.json").unwrap();
 /// // [...] read key_data from a file
@@ -79,7 +79,7 @@ impl Safe {
         peers: Vec<Multiaddr>,
         add_network_peers: bool,
         secret: Option<SecretKey>,
-        log_level: String,
+        log_level: &str,
     ) -> Result<Safe> {
 
         let log_handle = logging(log_level, None)?;
@@ -145,7 +145,7 @@ impl Safe {
     /// Change *ant_logging* levels to a group of pre-defined values.
     ///
     /// Possible group names are `trace`, `info` and `error`, case independent.
-    pub fn log_level(&mut self, level: String) -> Result<()> {
+    pub fn log_level(&mut self, level: &str) -> Result<()> {
         let _ = logging(level, self.log_handle.as_ref());
         Ok(())
     }
@@ -322,12 +322,12 @@ impl Safe {
 /// This can be used to easily generate `XorName`s by chaining text and bytes fragments to derive from a given `XorName` or a random one.
 ///
 /// ```no_run
-/// use safe_api::{Safe, XorNameBuilder};
+/// use safeapi::{Safe, XorNameBuilder};
 /// # use tokio;
 ///
 /// # #[tokio::main]
-/// # async fn main() -> Result<(), safe_api::Error> {
-/// # let mut safe = Safe::connect(vec![], true, None, "INFO".to_string()).await?;
+/// # async fn main() -> Result<(), safeapi::Error> {
+/// # let mut safe = Safe::connect(vec![], true, None, "INFO").await?;
 /// # safe.login(None)?;
 ///
 /// let data_name = safe.upload(&[10, 11, 12]).await?;

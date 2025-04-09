@@ -1,12 +1,12 @@
 //! Alternative API to access [`Autonomi Network`]. Focusing on being as simple as possible and cover most common usecases.
 //! ```no_run
-//! use safe_api::{Safe, XorNameBuilder};
+//! use safeapi::{Safe, XorNameBuilder};
 //! # use tokio;
 //!
 //! # #[tokio::main]
-//! # async fn main() -> Result<(), safe_api::Error> {
+//! # async fn main() -> Result<(), safeapi::Error> {
 //! // connect to mainnet
-//! let mut safe = Safe::connect(vec![], true, None, "INFO".to_string()).await?;
+//! let mut safe = Safe::connect(vec![], true, None, "INFO").await?;
 //!
 //! # let key_data = std::fs::read("/encrypted/secret_key.json").unwrap();
 //! // [...] read key_data from a file

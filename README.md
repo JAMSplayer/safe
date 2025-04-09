@@ -9,6 +9,10 @@ The goal is to create a high-level Safenet API, that follows best practices and 
   * No need to depend on external crates. Re-export identifiers when neeeded (`pub use`).
   * (TODO) Don't write to stdout/stderr, just return `Result` or use logging infrastructure.
 
+## Documentation
+
+https://docs.rs/safeapi
+
 ## Testing
 
 `cargo test`

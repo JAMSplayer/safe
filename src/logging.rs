@@ -19,7 +19,7 @@ fn targets() -> Vec<(String, Option<Level>, Option<Level>, Option<Level>)> {
     ]
 }
 
-pub fn logging(level: String, handle: Option<&LoggingHandle>) -> Result<Option<LoggingHandle>> {
+pub fn logging(level: &str, handle: Option<&LoggingHandle>) -> Result<Option<LoggingHandle>> {
     let logging_targets = targets();
 
 	let logging_targets: Vec<(String, Option<Level>)> = match level.to_lowercase().as_str() {

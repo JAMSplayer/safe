@@ -1,5 +1,5 @@
 [package]
-name = "safe_api"
+name = "safeapi"
 version = "0.3.0"
 edition = "2021"
 description = "Simple Autonomi Network Client"
@@ -10,26 +10,26 @@ keywords = ["autonomi", "p2p", "DePin"]
 categories = ["api-bindings", "cryptography", "data-structures", "security"]
 
 [dependencies]
-tokio = "*"
-bytes = { version = "*", features = ["serde"] }
-tracing = "*"
+tokio = "1"
+bytes = { version = "1", features = ["serde"] }
+tracing = "0.1"
 rand = "0.8.5"
-xor_name = "*"
-libp2p = { version="*", features = ["serde"] }
-bls = { package = "blsttc", version = "*" }
-alloy-primitives = "*"
-rmp-serde = "*"
+xor_name = "5"
+libp2p = { version="0.55", features = ["serde"] }
+bls = { package = "blsttc", version = "8" }
+alloy-primitives = "0.8"
+rmp-serde = "1"
 
 argon2 = "0.5"
 password-hash = "0.5"
-aes-gcm = "*"
+aes-gcm = "0.10"
 serde_json = "1"
-serde = "*"
+serde = "1"
 
-ant-logging = "*"
+ant-logging = "0.2"
 autonomi = { version = "0.4.3", features = ["loud"] }
-evmlib = "*"
-ant-protocol = "*"
+evmlib = "0.2"
+ant-protocol = "1"
 
 [profile.dev]
 debug = 0
