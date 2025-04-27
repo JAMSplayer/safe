@@ -18,24 +18,25 @@ use autonomi::{
     PointerAddress,
     GraphEntryAddress,
     graph::GraphError,
-    Network,
+    Network as EvmNetwork,
     client::{payment::PaymentOption, data::DataAddress},
 };
 use bytes::Bytes;
 use std::str::FromStr;
+use serde::{Serialize, Deserialize};
 
 pub const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a92546f05993"; // could be anything, it does not have to be secret, because it's only used as a base for derivation. Changing this will make all Autonomi data created before UNACCESSIBLE!!
 
 /// An alternative Autonomi API
 ///
 /// ```no_run
-/// use safeapi::{Safe, XorNameBuilder};
+/// use safeapi::{Network, Safe, XorNameBuilder};
 /// # use tokio;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), safeapi::Error> {
 /// // connect to mainnet
-/// let mut safe = Safe::connect(vec![], true, None, "INFO").await?;
+/// let mut safe = Safe::connect(Network::Mainnet, None, "INFO").await?;
 ///
 /// # let key_data = std::fs::read("/encrypted/secret_key.json").unwrap();
 /// // [...] read key_data from a file
@@ -47,7 +48,7 @@ pub const ROOT_SK: &str = "160922b4d2b35fec6b7a36a54c9793bea0fdef00c2630b4361e7a
 /// # }
 /// ```
 pub struct Safe {
-    evm_network: Network,
+    evm_network: EvmNetwork,
     client: Client,
     wallet: Option<Wallet>,
     sk: Option<SecretKey>,
@@ -71,32 +72,64 @@ impl std::fmt::Debug for Safe {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Network {
+    Alpha,
+    Mainnet,
+    Local(Vec<String>),
+}
+
 impl Safe {
     /// Connect to Autonomi
     ///
     /// Autonomi will be connected without logging in (read-only), if `secret` is None. `log_level` is a group of pre-defined *ant_logging* levels. Possible values are `trace`, `info` and `error`, case independent.
     pub async fn connect(
-        peers: Vec<Multiaddr>,
-        add_network_peers: bool,
+        network: Network,
         secret: Option<SecretKey>,
         log_level: &str,
     ) -> Result<Safe> {
 
-        let log_handle = logging(log_level, None)?;
-        let network = get_evm_network(!add_network_peers)?;
+        let (addrs, local, disable_mainnet_contacts, network_id, evm_network) = match network {
+            Network::Alpha => {
+                let mut peers: Vec<Multiaddr> = Vec::new();
+                peers.push("/ip4/206.189.96.49/udp/49841/quic-v1/p2p/12D3KooWQp3XJ6SRVLvLhezJQ7QgTQWFwDDVvwrXZQrFL4NfebWX".parse().expect("Alpha network Multiaddr parse."));
+
+                (peers, false, true, Some(2), EvmNetwork::ArbitrumSepoliaTest)
+            },
+            Network::Mainnet => {
+                (Vec::<Multiaddr>::new(), false, false, None, EvmNetwork::ArbitrumOne)
+            },
+            Network::Local(peers_str) => {
+                let mut peers: Vec<Multiaddr> = Vec::new();
+                for peer_str in &peers_str {
+                    peers.push(
+                        peer_str
+                            .parse()
+                            .map_err(|e| Error::Custom(format!("Local network peer Multiaddr \"{}\" parse: {}", peer_str, e)))?
+                    );
+                }
+                let evm_network = get_evm_network(true)?;
+
+                (peers, true, true, None, evm_network)
+            },
+        };
 
         let client = Client::init_with_config(ClientConfig {
             init_peers_config: InitialPeersConfig {
-                addrs: peers,
-                local: !add_network_peers,
+                addrs: addrs,
+                local: local,
+                disable_mainnet_contacts: disable_mainnet_contacts,
                 ..Default::default()
             },
-            evm_network: network.clone(),
+            evm_network: evm_network.clone(),
             strategy: Default::default(),
+            network_id: network_id,
         }).await?;
 
+        let log_handle = logging(log_level, None)?;
+
         let mut safe = Safe {
-            evm_network: network,
+            evm_network: evm_network,
             client: client,
             wallet: None,
             sk: None,
@@ -322,12 +355,12 @@ impl Safe {
 /// This can be used to easily generate `XorName`s by chaining text and bytes fragments to derive from a given `XorName` or a random one.
 ///
 /// ```no_run
-/// use safeapi::{Safe, XorNameBuilder};
+/// use safeapi::{Network, Safe, XorNameBuilder};
 /// # use tokio;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), safeapi::Error> {
-/// # let mut safe = Safe::connect(vec![], true, None, "INFO").await?;
+/// # let mut safe = Safe::connect(Network::Mainnet, None, "INFO").await?;
 /// # safe.login(None)?;
 ///
 /// let data_name = safe.upload(&[10, 11, 12]).await?;
@@ -393,7 +426,6 @@ impl XorNameBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xor_name::XorName;
 
     #[test]
     fn xor_builder() {

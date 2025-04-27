@@ -24,11 +24,11 @@ argon2 = "0.5"
 password-hash = "0.5"
 aes-gcm = "0.10"
 serde_json = "1"
-serde = "1"
+serde = { version = "1", features = ["derive"] }
 
 ant-logging = "0.2"
-autonomi = { version = "0.4.3", features = ["loud"] }
-evmlib = "0.2"
+autonomi = { version = "0.4.4", features = ["loud"] }
+evmlib = "0.3"
 ant-protocol = "1"
 
 [profile.dev]

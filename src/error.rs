@@ -61,8 +61,8 @@ impl From<autonomi::pointer::PointerError> for Error {
     }
 }
 
-impl From<evmlib::utils::Error> for Error {
-    fn from(err: evmlib::utils::Error) -> Self {
+impl From<autonomi::EvmUtilError> for Error {
+    fn from(err: autonomi::EvmUtilError) -> Self {
         Error::Custom(format!("evm utils: {}", err))
     }
 }

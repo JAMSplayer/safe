@@ -1,19 +1,20 @@
 use std::{path::Path, process::ExitCode};
 use tokio::runtime::Runtime;
 
-use safeapi::{Safe, XorNameBuilder, Multiaddr, Result, SecretKey};
+use safeapi::{Safe, XorNameBuilder, Multiaddr, Result, SecretKey, Network};
 
 async fn run() -> Result<()> {
-    let mut peers = Vec::new();
 
-    let addr: Multiaddr =
+//    let network = Network::Alpha;
+//    let network = Network::Mainnet;
+    let network = Network::Local(vec![
         "/ip4/127.0.0.1/udp/42376/quic-v1/p2p/12D3KooWEdFwKJgDh7Ga92oZTVEzyzV9HWfWTNaPtK9FoFo8MkMK"
-            .parse()
-            .unwrap(); // local testnet
-    peers.push(addr);
+        .to_string()
+    ]);
 
-    println!("\n\nConnecting with peers: {:?} ...", &peers);
-    let mut s = Safe::connect(peers, false, None, "INFO".into()).await?;
+
+    println!("\n\nConnecting network: {:?} ...", network);
+    let mut s = Safe::connect(network, None, "ERROR".into()).await?;
     s.login_with_eth(Some(String::from(
         "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
     )))?;
