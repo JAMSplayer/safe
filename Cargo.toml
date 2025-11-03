@@ -15,7 +15,7 @@ bytes = { version = "1", features = ["serde"] }
 tracing = "0.1"
 rand = "0.8.5"
 xor_name = "5"
-libp2p = { version="0.55", features = ["serde"] }
+libp2p = { version="0.56", features = ["serde"] }
 bls = { package = "blsttc", version = "8" }
 alloy-primitives = "0.8"
 rmp-serde = "1"
