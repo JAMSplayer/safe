@@ -28,7 +28,7 @@ serde = { version = "1", features = ["derive"] }
 
 ant-logging = "0.2"
 autonomi = { version = "0.4.4", features = ["loud"] }
-evmlib = "0.3"
+evmlib = "0.4"
 ant-protocol = "1"
 
 [profile.dev]
